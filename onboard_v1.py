@@ -103,8 +103,6 @@ def main():
             signature=assinatura,
             input_example=X.head(3),
             registered_model_name=config.NOME_MODELO,
-            skops_trusted_types=["sklearn.tree._tree.Tree"],
-
         )
         run_id = run.info.run_id
 

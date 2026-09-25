@@ -52,8 +52,7 @@ def main():
     if atual.empty:
         raise SystemExit(f"lote '{args.lote}' nao existe no banco. "
                          f"Envie o csv pelo front primeiro.")
-    referencia = banco.carregar_conjunto(args.referencia)
-        # A referencia pode ser uma tabela (treino_v1, validacao_atual) ou um lote
+    # A referencia pode ser uma tabela (treino_v1, validacao_atual) ou um lote
     # que a API ja pontuou (lote_aula2_fev). O segundo caso e o que permite
     # comparar "este mes contra o mes passado" em vez de contra o treino.
     if banco.existe_tabela(args.referencia):
