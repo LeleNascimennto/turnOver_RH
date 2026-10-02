@@ -1,0 +1,1769 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MLOps Aula 4 — Quando a coluna para de existir</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #050a14; --cyan: #00e5ff; --green: #00ff88; --orange: #ff6b35;
+  --purple: #7c3aed; --pink: #f472b6; --text: #e8f4f8; --muted: #7fa8c0;
+  --card: rgba(255,255,255,0.04); --border: rgba(0,229,255,0.15);
+}
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+html, body { width:100%; height:100%; overflow:hidden; background:var(--bg); color:var(--text); font-family:'IBM Plex Sans',sans-serif; }
+#bg { position:fixed; inset:0; z-index:0; opacity:.3; pointer-events:none; }
+#progress-bar { position:fixed; top:0; left:0; height:3px; z-index:200; background:linear-gradient(90deg, var(--cyan), var(--purple)); transition: width .4s ease; }
+#topbar { position:fixed; top:0; left:0; right:0; height:52px; z-index:150; background:rgba(5,10,20,.88); backdrop-filter:blur(14px); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; padding:0 32px; }
+.tb-label { font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--cyan); letter-spacing:2px; text-transform:uppercase; }
+.tb-counter { font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--muted); }
+.tb-title { font-size:13px; color:var(--muted); max-width:360px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#slides { position:fixed; inset:0; z-index:1; }
+.slide { position:absolute; inset:0; display:flex; flex-direction:column; justify-content:flex-start; align-items:center; padding:72px 60px 80px; opacity:0; pointer-events:none; transition: opacity .5s ease, transform .5s ease; transform: translateX(60px); overflow-y:auto; }
+.slide.active { opacity:1; pointer-events:all; transform:translateX(0); }
+.slide.prev { opacity:0; pointer-events:none; transform:translateX(-60px); }
+.slide-inner { width:100%; max-width:1080px; margin:auto 0; }
+#nav-prev, #nav-next { position:fixed; top:50%; z-index:200; transform:translateY(-50%); width:48px; height:48px; border-radius:50%; border:1px solid var(--border); background:rgba(5,10,20,.7); backdrop-filter:blur(8px); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:20px; color:var(--cyan); transition:all .2s; user-select:none; }
+#nav-prev { left:16px; } #nav-next { right:16px; }
+#nav-prev:hover, #nav-next:hover { background:rgba(0,229,255,.12); border-color:var(--cyan); }
+#nav-prev.disabled, #nav-next.disabled { opacity:.25; pointer-events:none; }
+#dots { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); display:flex; gap:6px; z-index:200; flex-wrap:wrap; max-width:70%; justify-content:center; }
+.dot { width:7px; height:7px; border-radius:50%; background:var(--muted); opacity:.4; cursor:pointer; transition:all .3s; }
+.dot.active { background:var(--cyan); opacity:1; transform:scale(1.3); }
+.dot.done { background:var(--green); opacity:.8; }
+
+.tag  { font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--cyan);   letter-spacing:3px; text-transform:uppercase; margin-bottom:10px; display:block; }
+.gtag { font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--green);  letter-spacing:3px; text-transform:uppercase; margin-bottom:10px; display:block; }
+.ptag { font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--purple); letter-spacing:3px; text-transform:uppercase; margin-bottom:10px; display:block; }
+.otag { font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--orange); letter-spacing:3px; text-transform:uppercase; margin-bottom:10px; display:block; }
+
+h1.hero-title { font-family:'Syne',sans-serif; font-size:clamp(2.2rem,4.6vw,4rem); font-weight:800; line-height:1.08; margin-bottom:20px; }
+h2.sec-title  { font-family:'Syne',sans-serif; font-size:clamp(1.4rem,3vw,2.3rem); font-weight:800; line-height:1.18; margin-bottom:12px; }
+h3.slide-h3   { font-family:'Syne',sans-serif; font-size:1.15rem; font-weight:700; margin-bottom:14px; }
+p.lead { color:var(--muted); font-size:.98rem; line-height:1.7; margin-bottom:22px; }
+
+.badge { display:inline-flex; align-items:center; gap:8px; background:rgba(0,229,255,.08); border:1px solid var(--border); border-radius:20px; padding:6px 16px; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--cyan); letter-spacing:1px; margin-bottom:26px; width:fit-content; }
+.badge::before { content:''; width:7px; height:7px; background:var(--green); border-radius:50%; animation:pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.5)} }
+.hero-q { background:linear-gradient(135deg,rgba(0,229,255,.06),rgba(124,58,237,.06)); border:1px solid rgba(0,229,255,.2); border-left:4px solid var(--cyan); border-radius:12px; padding:20px 26px; font-size:1.02rem; color:var(--text); max-width:800px; margin-top:6px; animation:fadeUp .8s ease both .3s; }
+@keyframes fadeUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+
+.card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:22px; }
+.g2 { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+.g3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; }
+@media(max-width:680px){.g2,.g3{grid-template-columns:1fr}}
+.pill-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:24px; }
+.pill { background:rgba(0,255,136,.07); border:1px solid rgba(0,255,136,.25); border-radius:20px; padding:5px 14px; font-size:12px; color:var(--green); font-family:'IBM Plex Mono',monospace; }
+.bridge { background:linear-gradient(135deg,rgba(0,229,255,.05),rgba(124,58,237,.05)); border:1px solid rgba(0,229,255,.2); border-radius:14px; padding:22px 26px; }
+
+.bloco-mark { display:inline-flex; align-items:center; gap:10px; margin-bottom:14px; font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:2.5px; text-transform:uppercase; border-radius:20px; padding:5px 15px; }
+.bl-a { background:rgba(0,229,255,.09);  border:1px solid rgba(0,229,255,.35);  color:var(--cyan); }
+.bl-b { background:rgba(255,107,53,.09); border:1px solid rgba(255,107,53,.35); color:var(--orange); }
+.bl-c { background:rgba(0,255,136,.08);  border:1px solid rgba(0,255,136,.32);  color:var(--green); }
+
+.tbl { width:100%; border-collapse:collapse; font-size:.82rem; }
+.tbl th { text-align:left; font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--cyan); padding:9px 12px; border-bottom:1px solid var(--border); white-space:nowrap; }
+.tbl td { padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.05); color:var(--muted); vertical-align:top; line-height:1.5; }
+.tbl td strong, .tbl td code { color:var(--text); }
+.tbl td code { font-family:'IBM Plex Mono',monospace; background:rgba(0,0,0,.3); padding:1px 6px; border-radius:4px; font-size:.78rem; }
+.tbl tbody tr:hover td { background:rgba(0,229,255,.03); }
+.tbl tr.sep-a td { background:rgba(0,229,255,.05); }
+.tbl tr.sep-c td { background:rgba(0,255,136,.04); }
+
+.code { background:rgba(0,0,0,.42); border:1px solid var(--border); border-radius:10px; padding:14px 18px; font-family:'IBM Plex Mono',monospace; font-size:.74rem; line-height:1.7; overflow-x:auto; white-space:pre; color:#bfe4f2; max-height:52vh; overflow-y:auto; }
+.code .k { color:var(--pink); }
+.code .s { color:var(--green); }
+.code .c { color:var(--muted); font-style:italic; }
+.code .h { color:var(--cyan); font-weight:500; }
+.code .o { color:var(--orange); }
+.code-wrap { border:1px solid var(--border); border-radius:9px; overflow:hidden; margin-bottom:14px; transition:border-color .2s, box-shadow .2s; }
+.code-wrap.open { border-color:var(--cyan); box-shadow:0 0 0 1px rgba(0,229,255,.08); }
+.code-header { display:flex; justify-content:space-between; align-items:center; padding:9px 14px; background:rgba(0,0,0,.55); border-bottom:1px solid var(--border); cursor:pointer; user-select:none; transition:background .15s; gap:12px; }
+.code-header:hover { background:rgba(0,229,255,.06); }
+.code-header .fname { font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--cyan); }
+.code-right { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+.code-header .lbadge { font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; }
+.code-toggle-btn { font-family:'IBM Plex Mono',monospace; font-size:9.5px; letter-spacing:.5px; color:var(--cyan); border:1px solid var(--border); border-radius:20px; padding:3px 11px; white-space:nowrap; transition:.2s; background:rgba(0,229,255,.05); }
+.code-toggle-btn::before { content:'▸ '; }
+.code-wrap.open .code-toggle-btn { color:var(--bg); background:var(--green); border-color:var(--green); font-weight:600; }
+.code-wrap.open .code-toggle-btn::before { content:'▾ '; }
+.copy-btn { font-family:'IBM Plex Mono',monospace; font-size:9.5px; letter-spacing:.5px; color:var(--purple); border:1px solid rgba(124,58,237,.4); border-radius:20px; padding:3px 11px; white-space:nowrap; transition:.2s; background:rgba(124,58,237,.08); cursor:pointer; display:none; }
+.copy-btn:hover { background:rgba(124,58,237,.2); color:var(--pink); }
+.copy-btn.done { color:var(--bg); background:var(--green); border-color:var(--green); font-weight:600; }
+.code-wrap.open .copy-btn { display:inline-block; }
+.code-wrap .code { display:none; border:none; border-radius:0; }
+.code-wrap.open .code { display:block; animation:codeIn .28s ease; }
+@keyframes codeIn { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+
+.step-marker { display:flex; align-items:center; gap:16px; margin-bottom:18px; }
+.step-num { font-family:'Syne',sans-serif; font-weight:800; font-size:1.6rem; width:52px; height:52px; border-radius:14px; display:flex; align-items:center; justify-content:center; background:rgba(0,229,255,.08); border:1px solid var(--border); color:var(--cyan); flex-shrink:0; }
+.step-num.b { background:rgba(255,107,53,.08); border-color:rgba(255,107,53,.3); color:var(--orange); }
+.step-num.c { background:rgba(0,255,136,.07); border-color:rgba(0,255,136,.3); color:var(--green); }
+.step-meta { display:flex; flex-direction:column; gap:2px; }
+.step-file { font-family:'IBM Plex Mono',monospace; font-size:.92rem; color:var(--text); }
+.step-obj { font-size:.78rem; color:var(--muted); }
+
+.callout { border-left:3px solid; border-radius:0 8px 8px 0; padding:12px 16px; margin:12px 0 0; font-size:.83rem; line-height:1.6; }
+.callout .ct { font-family:'IBM Plex Mono',monospace; font-weight:500; font-size:9.5px; text-transform:uppercase; letter-spacing:1.5px; margin-bottom:5px; }
+.callout p { margin:0; color:var(--muted); font-size:.83rem; }
+.callout p + p { margin-top:8px; }
+.callout code { font-family:'IBM Plex Mono',monospace; background:rgba(0,0,0,.3); padding:1px 6px; border-radius:4px; color:var(--text); font-size:.78rem; }
+.co-ok   { border-color:var(--green);  background:rgba(0,255,136,.05); } .co-ok .ct { color:var(--green); }
+.co-warn { border-color:var(--orange); background:rgba(255,107,53,.05); } .co-warn .ct { color:var(--orange); }
+.co-info { border-color:var(--purple); background:rgba(124,58,237,.06); } .co-info .ct { color:#c4b5fd; }
+.co-err  { border-color:#ff4d6d; background:rgba(255,77,109,.06); } .co-err .ct { color:#ff8fa3; }
+
+.test-box { background:rgba(0,255,136,.04); border:1px solid rgba(0,255,136,.22); border-radius:12px; padding:16px 20px; margin-bottom:12px; }
+.test-box .tt { font-family:'Syne',sans-serif; font-weight:800; font-size:.88rem; color:var(--green); margin-bottom:8px; display:flex; align-items:center; gap:8px; }
+.test-box ol, .test-box ul { margin-left:18px; }
+.test-box li { font-size:.83rem; color:var(--muted); line-height:1.65; margin-bottom:4px; }
+.test-box li strong, .test-box li code { color:var(--text); }
+.test-box code { font-family:'IBM Plex Mono',monospace; background:rgba(0,0,0,.3); padding:1px 6px; border-radius:4px; font-size:.78rem; }
+
+.qa { width:100%; border-collapse:collapse; font-size:.82rem; }
+.qa td { padding:10px; border-bottom:1px solid rgba(255,255,255,.06); color:var(--muted); vertical-align:top; line-height:1.55; }
+.qa td.n { color:var(--green); font-family:'IBM Plex Mono',monospace; width:26px; text-align:center; }
+.qa tr:last-child td { border-bottom:none; }
+.acao { color:var(--text); font-size:.85rem; }
+.qa code { font-family:'IBM Plex Mono',monospace; background:rgba(0,0,0,.3); padding:1px 6px; border-radius:4px; color:var(--text); font-size:.76rem; }
+
+.final-check { display:flex; flex-direction:column; gap:8px; margin-bottom:18px; }
+.fc-item { display:flex; align-items:center; gap:12px; padding:9px 16px; background:var(--card); border:1px solid var(--border); border-radius:10px; opacity:0; transform:translateX(-16px); }
+.final-check.play .fc-item { animation:fcIn .5s ease forwards; }
+.final-check.play .fc-item:nth-child(1){animation-delay:.04s}
+.final-check.play .fc-item:nth-child(2){animation-delay:.12s}
+.final-check.play .fc-item:nth-child(3){animation-delay:.20s}
+.final-check.play .fc-item:nth-child(4){animation-delay:.28s}
+.final-check.play .fc-item:nth-child(5){animation-delay:.36s}
+.final-check.play .fc-item:nth-child(6){animation-delay:.44s}
+.final-check.play .fc-item:nth-child(7){animation-delay:.52s}
+.final-check.play .fc-item:nth-child(8){animation-delay:.60s}
+.final-check.play .fc-item:nth-child(9){animation-delay:.68s}
+.final-check.play .fc-item:nth-child(10){animation-delay:.76s}
+.final-check.play .fc-item:nth-child(11){animation-delay:.84s}
+.final-check.play .fc-item:nth-child(12){animation-delay:.92s}
+.final-check.play .fc-item:nth-child(13){animation-delay:1.00s}
+.final-check.play .fc-item:nth-child(14){animation-delay:1.08s}
+.final-check.play .fc-item:nth-child(15){animation-delay:1.16s}
+.final-check.play .fc-item:nth-child(13){animation-delay:1.00s}
+@keyframes fcIn { to{opacity:1;transform:translateX(0)} }
+.fc-check { width:20px; height:20px; border-radius:50%; border:1px solid var(--green); color:var(--green); flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:11px; }
+.fc-text { font-size:.82rem; color:var(--text); font-family:'IBM Plex Mono',monospace; }
+
+.yn { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+@media(max-width:680px){ .yn{ grid-template-columns:1fr; } }
+.yn-col { border-radius:14px; padding:18px 20px; }
+.yn-yes { background:rgba(0,255,136,.05); border:1px solid rgba(0,255,136,.22); }
+.yn-no  { background:rgba(255,107,53,.05); border:1px solid rgba(255,107,53,.22); }
+.yn-col h4 { font-family:'Syne',sans-serif; font-size:.92rem; margin-bottom:12px; }
+.yn-col li { list-style:none; font-size:.82rem; color:var(--muted); line-height:1.55; padding:5px 0 5px 20px; position:relative; }
+.yn-yes li::before { content:'✓'; position:absolute; left:0; color:var(--green); }
+.yn-no  li::before { content:'✕'; position:absolute; left:0; color:var(--orange); }
+
+.next-pills { display:flex; flex-wrap:wrap; gap:10px; }
+.next-pill { font-family:'IBM Plex Mono',monospace; font-size:11.5px; padding:8px 15px; border-radius:20px; background:rgba(124,58,237,.08); border:1px solid rgba(124,58,237,.3); color:var(--pink); }
+.slide-scroll { overflow-y:auto; }
+.divider { height:1px; background:var(--border); margin:18px 0; }
+code.inline { font-family:'IBM Plex Mono',monospace; color:var(--cyan); background:rgba(0,229,255,.06); padding:1px 7px; border-radius:5px; font-size:.86em; }
+
+.ciclo { display:flex; align-items:stretch; gap:8px; flex-wrap:wrap; margin:10px 0 6px; }
+.ci-step { flex:1; min-width:132px; border-radius:12px; padding:14px; background:var(--card); border:1px solid var(--border); font-family:'IBM Plex Mono',monospace; font-size:.72rem; color:var(--muted); line-height:1.5; }
+.ci-step .ci-n { display:block; font-size:.68rem; letter-spacing:1.5px; margin-bottom:6px; opacity:.75; }
+.ci-step .ci-t { display:block; font-size:.86rem; color:var(--text); margin-bottom:5px; font-family:'Syne',sans-serif; font-weight:700; }
+.ci-a { border-color:rgba(0,229,255,.4);  background:rgba(0,229,255,.06); } .ci-a .ci-n { color:var(--cyan); }
+.ci-b { border-color:rgba(255,107,53,.4); background:rgba(255,107,53,.06); } .ci-b .ci-n { color:var(--orange); }
+.ci-c { border-color:rgba(0,255,136,.35); background:rgba(0,255,136,.05); } .ci-c .ci-n { color:var(--green); }
+
+.cadeia { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:12px 0 4px; }
+.cd-box { flex:1; min-width:150px; border-radius:10px; padding:13px 15px; text-align:center; background:rgba(255,77,109,.06); border:1px solid rgba(255,77,109,.28); font-family:'IBM Plex Mono',monospace; font-size:.74rem; color:#ffb3c1; line-height:1.5; }
+.cd-box.fim { background:rgba(255,77,109,.14); border-color:rgba(255,77,109,.5); color:#ff8fa3; font-weight:600; }
+.cd-arrow { color:#ff8fa3; font-size:1.3rem; flex-shrink:0; }
+@media(max-width:780px){ .cd-arrow{ transform:rotate(90deg); } }
+
+.juiz { background:rgba(0,255,136,.04); border:1px solid rgba(0,255,136,.22);
+        border-radius:14px; padding:18px 22px; margin:14px 0 20px; }
+.juiz h4 { font-family:'Syne',sans-serif; font-size:1rem; color:var(--green); margin-bottom:10px; }
+.juiz p { color:var(--muted); font-size:.86rem; line-height:1.7; }
+.juiz ol { margin:10px 0 12px 18px; }
+.juiz li { color:var(--muted); font-size:.85rem; line-height:1.65; margin-bottom:8px; }
+.juiz li b, .juiz p b { color:var(--text); }
+.juiz code { font-family:'IBM Plex Mono',monospace; background:rgba(0,0,0,.3);
+             padding:1px 6px; border-radius:4px; color:var(--text); font-size:.8rem; }
+.juiz .ressalva { border-left:2px solid var(--orange); padding-left:12px; margin-top:12px;
+                  font-size:.83rem; }
+
+.ui-tour { display:flex; flex-direction:column; gap:12px; margin:14px 0 18px; }
+.ui-item { display:flex; gap:14px; background:var(--card); border:1px solid var(--border);
+           border-radius:12px; padding:15px 18px; }
+.ui-n { font-family:'Syne',sans-serif; font-weight:800; font-size:1.1rem; width:32px; height:32px;
+        border-radius:9px; display:flex; align-items:center; justify-content:center; flex-shrink:0;
+        background:rgba(0,229,255,.1); border:1px solid var(--border); color:var(--cyan); }
+.ui-item h4 { font-family:'Syne',sans-serif; font-size:.95rem; margin-bottom:6px; }
+.ui-item p { color:var(--muted); font-size:.84rem; line-height:1.65; margin:0; }
+.ui-item p b { color:var(--text); }
+.ui-item code { font-family:'IBM Plex Mono',monospace; background:rgba(0,0,0,.3);
+                padding:1px 6px; border-radius:4px; color:var(--text); font-size:.78rem; }
+.ui-q { margin-top:8px !important; color:var(--cyan) !important; font-size:.8rem !important; }
+.ui-q i { font-style:italic; opacity:.85; }
+
+.email { background:rgba(255,255,255,.03); border:1px solid var(--border);
+         border-left:3px solid var(--orange); border-radius:0 12px 12px 0;
+         padding:18px 22px; margin:14px 0 18px; }
+.em-cab { display:flex; flex-direction:column; gap:3px; padding-bottom:10px; margin-bottom:12px;
+          border-bottom:1px solid var(--border); font-family:'IBM Plex Mono',monospace;
+          font-size:11px; color:var(--muted); }
+.em-cab b { color:var(--orange); font-weight:500; }
+.email p { color:#d3e6ef; font-size:.88rem; line-height:1.75; margin-bottom:10px; }
+.email p:last-child { margin-bottom:0; }
+
+.hip { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:14px 0 18px; }
+@media(max-width:700px){ .hip{ grid-template-columns:1fr; } }
+.hip-item { display:flex; gap:13px; background:var(--card); border:1px solid var(--border);
+            border-radius:12px; padding:15px 17px; }
+.hip-n { font-family:'Syne',sans-serif; font-weight:800; font-size:1.1rem; width:30px; height:30px;
+         border-radius:9px; display:flex; align-items:center; justify-content:center; flex-shrink:0;
+         background:rgba(124,58,237,.12); border:1px solid rgba(124,58,237,.35); color:#c4b5fd; }
+.hip-item h4 { font-family:'Syne',sans-serif; font-size:.9rem; margin-bottom:5px; }
+.hip-item p { color:var(--muted); font-size:.8rem; line-height:1.6; margin:0; }
+.hip-item p b { color:var(--text); }
+.hip-acao { margin-top:7px !important; color:var(--cyan) !important; font-size:.78rem !important;
+            font-family:'IBM Plex Mono',monospace; }
+
+.ev { display:flex; flex-direction:column; gap:11px; margin:14px 0 18px; }
+.ev-item { display:flex; gap:14px; background:rgba(0,255,136,.04);
+           border:1px solid rgba(0,255,136,.2); border-radius:12px; padding:15px 18px; }
+.ev-n { font-family:'Syne',sans-serif; font-weight:800; font-size:1rem; width:28px; height:28px;
+        border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0;
+        background:rgba(0,255,136,.1); border:1px solid rgba(0,255,136,.35); color:var(--green); }
+.ev-item h4 { font-family:'Syne',sans-serif; font-size:.92rem; margin-bottom:6px; }
+.ev-item p { color:var(--muted); font-size:.83rem; line-height:1.65; margin:0; }
+.ev-item code { font-family:'IBM Plex Mono',monospace; background:rgba(0,0,0,.35);
+                padding:1px 6px; border-radius:4px; color:var(--text); font-size:.78rem; }
+.ev-conc { margin-top:7px !important; padding-left:11px; border-left:2px solid var(--green); }
+.ev-conc b { color:var(--green); }
+
+.lacuna { background:linear-gradient(135deg,rgba(255,107,53,.06),rgba(124,58,237,.06));
+          border:1px solid rgba(255,107,53,.25); border-radius:14px; padding:18px 22px; }
+.lacuna h4 { font-family:'Syne',sans-serif; font-size:1rem; color:var(--orange); margin-bottom:10px; }
+.lacuna h4 i { font-style:italic; }
+.lacuna p { color:var(--muted); font-size:.86rem; line-height:1.72; margin-bottom:10px; }
+.lacuna p b { color:var(--text); }
+.lac-fecho { border-left:2px solid var(--orange); padding-left:12px; margin-bottom:0 !important;
+             color:var(--text) !important; }
+
+.dois-mundos { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:14px 0; }
+@media(max-width:700px){ .dois-mundos{ grid-template-columns:1fr; } }
+.dm-col { background:var(--card); border:1px solid var(--border); border-radius:13px; padding:17px 20px; }
+.dm-col.destaque { background:rgba(0,229,255,.06); border-color:rgba(0,229,255,.35); }
+.dm-col h4 { font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:1.8px;
+             text-transform:uppercase; color:var(--muted); margin-bottom:11px; }
+.dm-col.destaque h4 { color:var(--cyan); }
+.dm-q { font-size:.95rem; color:var(--text); line-height:1.55; margin-bottom:10px;
+        font-family:'Syne',sans-serif; }
+.dm-r { color:var(--muted); font-size:.83rem; line-height:1.65; margin:0; }
+
+.agflow { display:flex; align-items:stretch; gap:10px; flex-wrap:wrap; margin:6px 0 4px; }
+.agnode { flex:1; min-width:140px; border-radius:12px; padding:14px 16px; font-family:'IBM Plex Mono',monospace; font-size:.76rem; text-align:center; background:var(--card); border:1px solid var(--border); color:var(--muted); }
+.agnode .an-name { font-size:.86rem; color:var(--text); display:block; margin-bottom:6px; }
+.agnode.has  { background:rgba(0,255,136,.06); border-color:rgba(0,255,136,.35); } .agnode.has .an-name { color:var(--green); }
+.agnode.hasnt { background:rgba(255,107,53,.05); border-color:rgba(255,107,53,.25); } .agnode.hasnt .an-name { color:var(--orange); }
+@media(prefers-reduced-motion:reduce){ .slide,.fc-item,.badge::before{ transition:none!important; animation:none!important; } }
+
+/* ═══════════════════ widgets interativos ═══════════════════ */
+.wid { background:rgba(0,0,0,.28); border:1px solid var(--border); border-radius:14px;
+       padding:16px 18px; margin:14px 0 18px; }
+.wid-cab { display:flex; justify-content:space-between; align-items:baseline;
+           gap:14px; flex-wrap:wrap; margin-bottom:12px; }
+.wid-cab h4 { font-family:'Syne',sans-serif; font-size:.95rem; }
+.wid-cab span { font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--cyan);
+                letter-spacing:1.6px; text-transform:uppercase; }
+.wid svg { width:100%; height:auto; display:block; }
+.wid-ctrl { display:flex; gap:20px; flex-wrap:wrap; align-items:center; margin:12px 0 4px; }
+.wid-ctrl label { display:flex; flex-direction:column; gap:4px; flex:1; min-width:170px;
+                  font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--muted); }
+.wid input[type=range] { width:100%; accent-color:var(--cyan); }
+.wid-num { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
+.wid-num div { flex:1; min-width:104px; background:var(--card); border:1px solid var(--border);
+               border-radius:9px; padding:9px 12px; }
+.wid-num b { display:block; font-family:'IBM Plex Mono',monospace; font-size:1.05rem;
+             color:var(--text); }
+.wid-num span { font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:var(--muted);
+                letter-spacing:1.1px; text-transform:uppercase; }
+.w-ver { margin-top:11px; padding:9px 13px; border-radius:8px; font-size:.83rem;
+         line-height:1.6; border-left:3px solid; }
+.w-ver b { color:var(--text); }
+.w-ver.alto { border-color:var(--orange); background:rgba(255,107,53,.07); color:#ffc4a8; }
+.w-ver.baixo { border-color:var(--green); background:rgba(0,255,136,.06); color:#9fffcb; }
+.dr-btns { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+.dr-btn { font-family:'IBM Plex Mono',monospace; font-size:11px; padding:6px 14px;
+          border-radius:20px; border:1px solid var(--border); background:transparent;
+          color:var(--muted); cursor:pointer; transition:.15s; }
+.dr-btn:hover { color:var(--text); border-color:var(--cyan); }
+.dr-btn.ativo { background:rgba(0,229,255,.13); border-color:var(--cyan); color:var(--cyan); }
+.dr-txt { margin-top:11px; font-size:.85rem; line-height:1.68; color:var(--muted);
+          padding-left:12px; border-left:2px solid var(--purple); }
+.dr-txt b { color:var(--text); }
+
+.portao-sim{padding:4px 2px 2px}
+.ps-topo{display:flex;align-items:center;justify-content:space-between;gap:14px;
+  flex-wrap:wrap;margin-bottom:22px}
+.ps-arquivos{display:flex;gap:8px;flex-wrap:wrap}
+.ps-arq{background:rgba(255,255,255,.04);border:1px solid rgba(0,229,255,.22);
+  border-radius:8px;padding:7px 13px;cursor:pointer;color:var(--text);
+  font-family:inherit;text-align:left;line-height:1.25;transition:all .18s}
+.ps-arq b{display:block;font-size:12.5px;font-weight:600}
+.ps-arq span{font-size:10.5px;color:var(--muted)}
+.ps-arq:hover{border-color:var(--cyan);background:rgba(0,229,255,.08)}
+.ps-arq.ativo{border-color:var(--cyan);background:rgba(0,229,255,.13)}
+.ps-switch{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);
+  cursor:pointer;user-select:none}
+.ps-switch input{accent-color:var(--cyan);width:15px;height:15px;cursor:pointer}
+
+.ps-pista{position:relative;height:96px;display:flex;align-items:center;
+  justify-content:space-between;padding:0 4px;
+  background:linear-gradient(180deg,transparent 46%,rgba(0,229,255,.13) 46%,
+    rgba(0,229,255,.13) 54%,transparent 54%)}
+.ps-marco,.ps-portao{position:relative;z-index:2;background:var(--bg);
+  border:1px solid rgba(0,229,255,.25);border-radius:8px;padding:9px 12px;
+  text-align:center;line-height:1.3;min-width:104px}
+.ps-marco b,.ps-portao b{display:block;font-size:11.5px;font-weight:600}
+.ps-marco span,.ps-portao span{font-size:10px;color:var(--muted)}
+.ps-portao{border-width:2px;transition:border-color .3s,box-shadow .3s,background .3s}
+.ps-portao.aberto{border-color:var(--green);box-shadow:0 0 22px rgba(0,255,136,.28);
+  background:rgba(0,255,136,.07)}
+.ps-portao.fechado{border-color:var(--orange);box-shadow:0 0 22px rgba(255,107,53,.3);
+  background:rgba(255,107,53,.08)}
+.ps-portao.desligado{border-style:dashed;border-color:rgba(127,168,192,.35);opacity:.55}
+
+.ps-pacote{position:absolute;left:11%;top:31px;z-index:3;transform:translateX(-50%);
+  width:56px;height:34px;border-radius:6px;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;
+  font-size:10.5px;font-weight:600;color:#04121a;background:var(--cyan);
+  box-shadow:0 4px 14px rgba(0,229,255,.3);opacity:0;
+  transition:left 1s cubic-bezier(.45,.05,.3,1),top .75s ease-in,
+             opacity .35s,background .3s}
+.ps-pacote span{font-size:8.5px;font-weight:400;opacity:.8}
+.ps-pacote.ruim{background:var(--orange);box-shadow:0 4px 14px rgba(255,107,53,.35)}
+
+.ps-quar{margin-top:6px;border:1px dashed rgba(255,107,53,.4);border-radius:8px;
+  padding:9px 13px;text-align:center;line-height:1.35;
+  background:rgba(255,107,53,.05);transition:all .3s;opacity:.5}
+.ps-quar.cheia{opacity:1;border-style:solid;box-shadow:0 0 18px rgba(255,107,53,.18)}
+.ps-quar b{display:block;font-size:11.5px;color:var(--orange)}
+.ps-quar span{font-size:10.5px;color:var(--muted)}
+
+.ps-saida{margin-top:16px;min-height:96px;border-top:1px solid rgba(0,229,255,.14);
+  padding-top:14px;font-size:12.6px;line-height:1.65}
+.ps-saida .ps-vazio{color:var(--muted);font-style:italic}
+.ps-linha{display:flex;gap:10px;margin-bottom:7px}
+.ps-rot{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--cyan);
+  min-width:112px;text-transform:uppercase;letter-spacing:.8px;padding-top:2px}
+.ps-val{color:var(--text);flex:1}
+.ps-val.bom{color:var(--green)}
+.ps-val.ruim{color:var(--orange)}
+.ps-fecho{margin-top:11px;padding:9px 12px;border-radius:0 6px 6px 0;font-size:12.4px}
+.ps-fecho.retido{border-left:3px solid var(--orange);background:rgba(255,107,53,.08)}
+.ps-fecho.passou{border-left:3px solid var(--green);background:rgba(0,255,136,.07)}
+.ps-fecho.perigo{border-left:3px solid var(--orange);background:rgba(255,107,53,.12)}
+@media(max-width:700px){
+  .ps-pista{flex-direction:column;height:auto;gap:10px;background:none}
+  .ps-pacote{display:none}
+}
+</style>
+</head>
+<body>
+
+<canvas id="bg"></canvas>
+<div id="progress-bar"></div>
+
+<div id="topbar">
+  <span class="tb-label">⬡ MLOps · Aula 4 — Quando a coluna para de existir</span>
+  <span class="tb-title" id="slide-title-bar"></span>
+  <span class="tb-counter" id="slide-counter"></span>
+</div>
+
+<div id="nav-prev">←</div>
+<div id="nav-next">→</div>
+<div id="dots"></div>
+
+<div id="slides">
+
+<div class="slide" data-title="Abertura">
+<div class="slide-inner slide-scroll">
+
+
+  <div class="badge">FEATURE MORTA · SIMULAR SEM RÓTULO · O CONTRATO VIAJA COM O MODELO</div>
+  <h1 class="hero-title">Chegou abril.<br>E a faixa de alerta <span style="color:var(--orange)">quadruplicou</span>.</h1>
+  <p class="lead" style="max-width:800px;">A v2 continua em produção e o arquivo de março, reenviado corrigido, fechou com <b>165 nomes</b> na faixa de alerta. O arquivo de abril entrou pela API e a faixa veio com <b>711</b>. Março esvaziou a lista; abril a afoga. <strong style="color:var(--text)">E desta vez não há bug nenhum para consertar.</strong></p>
+  <div class="hero-q">📌 <strong>O que esta aula prova:</strong> uma coluna pode continuar chegando, com o nome certo, numérica, sem nulo — e estar morta. <u>Drift é o mundo mudando; bug é o retrato quebrando; coluna morta é o retrato perdendo o significado.</u> E quando uma coluna morre, a lista de features deixa de ser do projeto e passa a ser <b>de cada versão do modelo</b>.</div>
+  <div class="pill-row" style="margin-top:22px;">
+    <div class="pill">💀 perc_zeros 100,0</div>
+    <div class="pill">🧪 simular abril sem esperar julho</div>
+    <div class="pill">✂️ retreinar sem a coluna</div>
+    <div class="pill">↩️ a reversão tem que continuar funcionando</div>
+  </div>
+  <div class="callout co-warn">
+    <div class="ct">Antes de começar, confira o estado — no front</div>
+    <p>Suba os dois terminais (MLflow e <code>uvicorn app.main:app --reload --port 8000</code>) e abra <b>127.0.0.1:8000</b>. O cabeçalho tem que dizer <code>modelo v2 · @champion · 15 features</code>, e a tabela <b>Lotes já pontuados</b> tem que ter <code>lote_aula3_mar_corrigido</code>.</p>
+    <p>Copie <code>lote_aula4_abr.csv</code> para <code>dados/</code>. O fechamento de março para comparar: <strong style='color:var(--text)'>taxa positiva 0,5271 · alerta 165 · atenção 573 · ok 662</strong>.</p>
+  </div>
+
+
+
+</div>
+</div>
+<div class="slide" data-title="O chamado">
+<div class="slide-inner slide-scroll">
+
+
+  <span class="otag">o que chegou</span>
+  <h2 class="sec-title">O que a Marina escreveu</h2>
+  <div class="email">
+    <div class="em-cab">
+      <span><b>De:</b> Marina · RH Corporativo</span>
+      <span><b>Assunto:</b> Lista de abril com 711 em alerta — o time não dá conta</span>
+    </div>
+    <p>A lista de abril entrou e a faixa de <b>alerta</b> veio com <b>711 nomes</b>. Em março, depois da correção, eram <b>165</b>. O meu time consegue fazer umas 150 conversas de retenção por mês. Com 711 eu não tenho lista, tenho metade da unidade.</p>
+    <p>Desta vez eu sei o que mudou, e já adianto para vocês não perderem tempo: no dia 1º de abril entrou em vigor o <b>acordo de banco de horas</b> que assinamos com o sindicato em março. Hora trabalhada além da escala agora vira folga no banco, não é mais paga como hora extra. Foi uma conquista, inclusive — reduz custo de folha e o pessoal pediu.</p>
+    <p>O que eu não entendo é o que isso tem a ver com risco de alguém pedir demissão. <b>Consegue voltar a lista para o tamanho de março?</b></p>
+  </div>
+  <div class="callout co-info">
+    <div class="ct">O dia de hoje é o contrário de março</div>
+    <p>Em março a Marina não sabia a causa e o dado escondia a pista num comunicado de fornecedor. Hoje ela <b>sabe a causa</b> e entregou de bandeja. O que ninguém sabe ainda é o <b>efeito</b>: por que uma mudança de folha de pagamento faria o modelo achar que quatro vezes mais gente vai embora.</p>
+    <p>Guarde a frase dela: <i>“não é mais paga como hora extra”</i>. Ela vai explicar o relatório inteiro.</p>
+  </div>
+
+  <div class="callout co-err">
+    <div class="ct">O pedido que você talvez não consiga atender</div>
+    <p>“Voltar a lista para o tamanho de março” pressupõe que a informação que produzia a lista de março ainda existe. Guarde essa dúvida até o Bloco C — a resposta honesta vai ser um <b>não</b>, com número.</p>
+  </div>
+
+
+
+</div>
+</div>
+<div class="slide" data-title="Passo 0 · O front responde">
+<div class="slide-inner slide-scroll">
+
+
+  <span class="bloco-mark bl-a">Bloco A · observar</span>
+  <div class="step-marker">
+    <div class="step-num ">0</div>
+    <div class="step-meta">
+      <span class="step-file">O front, antes de qualquer terminal</span>
+      <span class="step-obj">Enviar abril e ler o que aparece.</span>
+    </div>
+  </div>
+
+  <p class="lead">Na aba de lote, envie <code>dados/lote_aula4_abr.csv</code>. Depois abra a lista de colaboradores: os totais por faixa de cada lote ficam no resumo do topo. Abril ao lado dos meses anteriores:</p>
+  <div class="card" style="padding:0;overflow:hidden;margin-bottom:18px;">
+    <table class="tbl">
+      <thead><tr><th>lote</th><th>modelo</th><th>taxa positiva</th><th>alerta</th><th>atenção</th><th>ok</th></tr></thead>
+      <tbody>
+<tr><td>lote_aula2_fev</td><td>v2</td><td>0,5193</td><td>303</td><td>424</td><td>673</td></tr>
+<tr><td>lote_aula3_mar (bug)</td><td>v2</td><td>0,3779</td><td>72</td><td>457</td><td>871</td></tr>
+<tr><td>lote_aula3_mar_corrigido</td><td>v2</td><td>0,5271</td><td>165</td><td>573</td><td>662</td></tr>
+<tr class="sep-a"><td><b>lote_aula4_abr</b></td><td>v2</td><td><b>0,7607</b></td><td><b style="color:var(--orange)">711</b></td><td>354</td><td>335</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout co-info">
+    <div class="ct">O que o cabeçalho já eliminou</div>
+    <p><code>modelo v2 · @champion · 15 features</code> — ninguém publicou nada desde março. <b>D (versão errada)</b> está fora, em trinta segundos, como na aula passada.</p>
+    <p>Repare também que a lista não inflou só no alerta: a faixa <b>ok</b> encolheu de 662 para 335. A v2 está achando que <b>três em cada quatro</b> pessoas vão sair. A taxa de saída real destes meses tem ficado em 44%.</p>
+  </div>
+
+
+
+</div>
+</div>
+<div class="slide" data-title="As hipóteses">
+<div class="slide-inner slide-scroll">
+
+
+  <span class="otag">antes de medir</span>
+  <h2 class="sec-title">As quatro de sempre. E uma quinta.</h2>
+  <p class="lead">A lista de março continua valendo. Mas hoje ela não basta, porque existe um jeito de o dado mudar que não é o mundo mudando, nem a régua, nem o código.</p>
+  <div class="hip">
+    <div class="hip-item"><div class="hip-n">A</div><div><h4>Mudou a população</h4><p>Gente diferente: fatores tortos, zeros deslocados, contagens acompanhando.</p><p class="hip-acao">→ retreinar incorporando o novo</p></div></div>
+    <div class="hip-item"><div class="hip-n">B</div><div><h4>Mudou a unidade</h4><p>Mesma gente, outra régua: fatores redondos, zeros idênticos, contagens intactas.</p><p class="hip-acao">→ corrigir a origem, nenhuma versão nova</p></div></div>
+    <div class="hip-item"><div class="hip-n">C</div><div><h4>Bug no pipeline</h4><p>Join quebrado, coluna trocada, <b>nulo virando zero</b>. O código produz um dado que não corresponde ao que aconteceu.</p><p class="hip-acao">→ achar e consertar o código</p></div></div>
+    <div class="hip-item"><div class="hip-n">D</div><div><h4>Versão errada</h4><p>Alias apontando para onde não devia.</p><p class="hip-acao">→ já eliminada no Passo 0</p></div></div>
+    <div class="hip-item"><div class="hip-n" style="background:var(--orange)">E</div><div><h4>A coluna perdeu o significado</h4><p>O dado está <b>correto</b> e continua chegando — mas o processo que o gerava mudou, e ele não mede mais o que media quando o modelo aprendeu a lê-lo.</p><p class="hip-acao">→ o modelo precisa parar de ler essa coluna</p></div></div>
+  </div>
+  <div class="callout co-warn">
+    <div class="ct">Por que C e E são perigosas juntas</div>
+    <p>“Nulo virando zero” está na lista de bugs da aula passada. Uma coluna morta por política e uma coluna zerada por um join quebrado <b>produzem exatamente o mesmo arquivo</b>. Guarde isso: daqui a pouco o dado vai parar de ajudar, e a decisão vai depender de outra fonte.</p>
+  </div>
+
+
+</div>
+</div>
+<div class="slide" data-title="Passo 1 · O relatório">
+<div class="slide-inner slide-scroll">
+
+
+  <span class="bloco-mark bl-a">Bloco A · observar</span>
+  <div class="step-marker">
+    <div class="step-num ">1</div>
+    <div class="step-meta">
+      <span class="step-file">monitorar.py contra o último mês aceito</span>
+      <span class="step-obj">Mesmo comando de março, referência nova.</span>
+    </div>
+  </div>
+
+  <p class="lead">A referência é o <b>último mês aceito</b>: <code>lote_aula3_mar_corrigido</code>. O <code>lote_aula3_mar</code> com bug nunca virou linha de base de nada.</p>
+
+  <div class="code-wrap open">
+  <div class="code-header" onclick="toggleCode(this)">
+    <span class="fname">terminal</span>
+    <div class="code-right"><span class="lbadge">rodar</span><button class="copy-btn" onclick="copyCode(event, this)">Copiar</button><span class="code-toggle-btn">Ocultar</span></div>
+  </div>
+  <pre class="code">python monitorar.py --lote lote_aula4_abr --referencia lote_aula3_mar_corrigido</pre>
+</div>
+
+
+  <div class="code-wrap open">
+  <div class="code-header" onclick="toggleCode(this)">
+    <span class="fname">o que aparece</span>
+    <div class="code-right"><span class="lbadge">o que aparece</span><span class="code-toggle-btn">Ocultar</span></div>
+  </div>
+  <pre class="code">lote lote_aula4_abr  (1400 linhas, modelo v2)
+referencia: lote_aula3_mar_corrigido
+
+                  feature    ks  media_ref  media_atual  razao_media  perc_zeros_ref  perc_zeros_atual
+               he_eventos 0.836     29.341        0.000          0.0            16.4             100.0
+           he_valor_total 0.836   4025.853        0.000          0.0            16.4             100.0
+      he_referencia_total 0.836    250.374        0.000          0.0            16.4             100.0
+          mov_sal_eventos 0.186      0.937        0.937          1.0            36.9              36.9
+        acidentes_eventos 0.118      0.180        0.180          1.0            85.8              85.8
+               hi_eventos 0.094      7.047        7.047          1.0            32.1              32.1
+       mov_sal_perc_medio 0.041      0.016        0.016          1.0            20.6              20.6
+   hi_minutos_irregulares 0.036    837.012      837.012          1.0            20.9              20.9
+      mov_sal_valor_total 0.020     71.051       71.051          1.0            20.6              20.6
+acidentes_com_afastamento 0.009      0.014        0.014          1.0            98.8              98.8
+  acidentes_dias_perdidos 0.003      0.562        0.562          1.0            98.8              98.8
+            abs_qtd_total 0.001      2.667        2.667          1.0            99.8              99.8
+              abs_eventos 0.001      0.002        0.002          1.0            99.8              99.8
+    horas_previstas_total 0.001    180.920      180.920          1.0            99.8              99.8
+        hi_minutos_extras 0.000      0.000        0.000          NaN           100.0             100.0
+
+resumo
+  linhas                   1400
+  taxa_predicao_positiva   0.7607
+  probabilidade_media      0.5631
+  features_em_drift        3
+  maior_ks                 0.836
+  features_mortas          4
+
+  atencao: feature(s) 100% zerada(s) -&gt; he_eventos, he_valor_total, he_referencia_total, hi_minutos_extras
+  uma coluna 100% zerada nao esta em drift. Ela esta morta.</pre>
+</div>
+
+  <div class="callout co-warn">
+    <div class="ct">A linha que você vê desde a Aula 1</div>
+    <p><code>features_mortas</code> sempre foi <b>1</b> — a <code>hi_minutos_extras</code>, zerada desde o treino. Hoje é <b>4</b>. E o próprio script, escrito na Aula 1, imprime a frase que dá nome à aula: <i>uma coluna 100% zerada não está em drift. Ela está morta.</i></p>
+  </div>
+
+
+
+</div>
+</div>
+<div class="slide" data-title="Passo 2 · As evidências">
+<div class="slide-inner slide-scroll">
+
+
+  <span class="bloco-mark bl-b">Bloco B · diagnosticar</span>
+  <div class="step-marker">
+    <div class="step-num b">2</div>
+    <div class="step-meta">
+      <span class="step-file">Ler o relatório coluna por coluna</span>
+      <span class="step-obj">Três evidências eliminam A e B. Nenhuma separa C de E.</span>
+    </div>
+  </div>
+
+  <div class="ev">
+    <div class="ev-item"><div class="ev-n">1</div><div><h4>A razão é 0,000 — não um fator</h4><p><code>he_eventos</code>, <code>he_referencia_total</code>, <code>he_valor_total</code>: média caiu a zero, exatamente.</p><p class="ev-conc">Nenhuma troca de régua multiplica por zero. Em março as razões eram 60 e 100 e o percentual de zeros ficou parado; aqui ele foi de 16,4% para 100%. <b>Elimina B.</b></p></div></div>
+    <div class="ev-item"><div class="ev-n">2</div><div><h4>A contagem de eventos morreu junto</h4><p><code>he_eventos</code> 29,341 → 0,000</p><p class="ev-conc">Em março a <code>he_eventos</code> intacta provou que era a mesma gente com outra régua. Hoje ela é a primeira a morrer: <b>não existem mais lançamentos</b> de hora extra. Não é valor diferente — é evento nenhum.</p></div></div>
+    <div class="ev-item"><div class="ev-n">3</div><div><h4>As outras doze estão idênticas a março</h4><p>Razão 1,0 e percentual de zeros igual em absenteísmo, acidentes, horário irregular e movimentação salarial.</p><p class="ev-conc">Se a população tivesse mudado, ela mudaria em mais de um bloco. Os KS de 0,186 e 0,118 são flutuação de amostra, sem mudança de média nem de zeros. <b>Elimina A.</b></p></div></div>
+    <div class="ev-item"><div class="ev-n">4</div><div><h4>E o que o dado <u>não</u> consegue dizer</h4><p>Um bloco inteiro, de uma única tabela de origem (<code>FtHoraExtraRH</code>), zerado de forma limpa, sem nulo e sem linha faltando.</p><p class="ev-conc">É exatamente o que um join quebrado com <code>fillna(0)</code> produziria. <b>O arquivo sozinho não separa C de E.</b> Quem separa é o calendário do RH: a Marina disse que desde 1º de abril não existe hora extra paga. Confirme por escrito antes de seguir — é a diferença entre consertar um código e mudar um modelo.</p></div></div>
+  </div>
+
+
+</div>
+</div>
+<div class="slide" data-title="O diagnóstico">
+<div class="slide-inner slide-scroll">
+
+
+  <span class="otag">o que você escreve</span>
+  <h2 class="sec-title">Três coisas diferentes com o mesmo KS alto</h2>
+  <div class="card" style="padding:0;overflow:hidden;margin-bottom:18px;">
+    <table class="tbl">
+      <thead><tr><th></th><th>fevereiro</th><th>março</th><th>abril</th></tr></thead>
+      <tbody>
+<tr><td>o que mudou</td><td>o mundo</td><td>o retrato</td><td>o significado</td></tr>
+<tr><td>razão de média</td><td>5,76 · 11,24 · tortas</td><td>60 · 100 · redondas</td><td>0,000</td></tr>
+<tr><td>% de zeros</td><td>64% → 16%</td><td>16,4% → 16,4%</td><td>16,4% → <b>100%</b></td></tr>
+<tr><td>contagem de eventos</td><td>multiplicou junto</td><td>intacta</td><td><b>morreu</b></td></tr>
+<tr><td>o dado está certo?</td><td>sim</td><td>não</td><td><b>sim</b></td></tr>
+<tr class="sep-a"><td>ação</td><td>retreinar incorporando</td><td>consertar a origem</td><td><b>retreinar sem a coluna</b></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout co-ok">
+    <div class="ct">O diagnóstico, em uma frase</div>
+    <p>O bloco de hora extra está <b>correto e morto</b>: desde 1º de abril o trabalho além da escala vai para o banco de horas, que o export não enxerga. A coluna vai continuar chegando zerada <b>para sempre</b>, e nenhum conserto de origem a traz de volta — porque não há nada quebrado.</p>
+  </div>
+  <div class="callout co-info">
+    <div class="ct">Por que não é drift</div>
+    <p>Drift é a distribuição mudar e a coluna continuar dizendo a mesma coisa. Aqui não há distribuição: há uma constante. O KS de 0,836 está certo em dizer que mudou — e errado em sugerir que um retreino com os dados novos resolveria. Uma coluna constante não ensina nada a nenhum modelo.</p>
+  </div>
+
+
+</div>
+</div>
+<div class="slide" data-title="Passo 3 · Por que a lista explodiu">
+<div class="slide-inner slide-scroll">
+
+
+  <span class="bloco-mark bl-b">Bloco B · diagnosticar</span>
+  <div class="step-marker">
+    <div class="step-num b">3</div>
+    <div class="step-meta">
+      <span class="step-file">Um groupby no treino</span>
+      <span class="step-obj">Quem não fazia hora extra saía mais.</span>
+    </div>
+  </div>
+
+  <p class="lead">A pergunta da Marina — o que folha de pagamento tem a ver com risco — tem resposta em quatro linhas. Rode na raiz do projeto:</p>
+
+  <div class="code-wrap open">
+  <div class="code-header" onclick="toggleCode(this)">
+    <span class="fname">python (na raiz do projeto)</span>
+    <div class="code-right"><span class="lbadge">você escreve</span><button class="copy-btn" onclick="copyCode(event, this)">Copiar</button><span class="code-toggle-btn">Ocultar</span></div>
+  </div>
+  <pre class="code"><span class="k">import</span> config
+<span class="k">from</span> app <span class="k">import</span> banco
+
+t = banco.carregar_conjunto(config.TABELA_TREINO)
+t[<span class="s">&quot;fez_hora_extra&quot;</span>] = t[<span class="s">&quot;he_eventos&quot;</span>] &gt; 0
+print(t.groupby(<span class="s">&quot;fez_hora_extra&quot;</span>)[config.COLUNA_ALVO].agg([<span class="s">&quot;mean&quot;</span>, <span class="s">&quot;size&quot;</span>]).round(3))</pre>
+</div>
+
+
+  <div class="code-wrap open">
+  <div class="code-header" onclick="toggleCode(this)">
+    <span class="fname">o que aparece</span>
+    <div class="code-right"><span class="lbadge">o que aparece</span><span class="code-toggle-btn">Ocultar</span></div>
+  </div>
+  <pre class="code">mean   size
+fez_hora_extra              
+False           0.554  12316
+True            0.441   6884</pre>
+</div>
+
+  <div class="callout co-err">
+    <div class="ct">O modelo aprendeu uma frase que deixou de ser verdade</div>
+    <p>No treino, <b>quem não fazia hora extra pedia demissão 55% das vezes</b>; quem fazia, 44%. A v2 aprendeu: <i>sem hora extra, mais risco</i>. Em abril, <b>ninguém</b> tem hora extra paga — então a v2 olha para 1.400 pessoas e vê 1.400 pessoas do grupo de risco.</p>
+    <p>Ela não está errada sobre o passado. Está lendo “não recebeu hora extra” como “não fez hora extra” — e em abril essas duas frases se separaram.</p>
+  </div>
+
+  <div class="callout co-info">
+    <div class="ct">Por que em março isso não acontecia</div>
+    <p>A população de Dourados que entrou em fevereiro faz muita hora extra: só 16,4% têm zero. Para essa gente, a coluna era justamente o que a tirava do grupo de risco. O bloco de hora extra somava <b>23,7%</b> da importância da v2 (<code>he_valor_total</code> 0,104 · <code>he_eventos</code> 0,066 · <code>he_referencia_total</code> 0,066).</p>
+  </div>
+
+
+
+</div>
+</div>
+<div class="slide" data-title="Morta antes, morta depois">
+<div class="slide-inner slide-scroll">
+
+
+  <span class="otag">a coluna que ninguém auditou</span>
+  <h2 class="sec-title">A <code>hi_minutos_extras</code> está morta desde a Aula 1. Por que ela nunca fez mal?</h2>
+  <div class="card" style="padding:0;overflow:hidden;margin-bottom:18px;">
+    <table class="tbl">
+      <thead><tr><th></th><th>hi_minutos_extras</th><th>bloco he_*</th></tr></thead>
+      <tbody>
+<tr><td>zerada desde</td><td>o treino</td><td>1º de abril</td></tr>
+<tr><td>importância na v2</td><td><b>0,0000</b></td><td><b>0,237</b></td></tr>
+<tr><td>o que o modelo aprendeu com ela</td><td>nada — é constante</td><td>"zero = risco"</td></tr>
+<tr><td>efeito de continuar zerada</td><td>nenhum</td><td>711 em alerta</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout co-ok">
+    <div class="ct">A regra</div>
+    <p>Coluna morta <b>desde o treino</b> é inofensiva: o modelo nunca aprendeu nada com ela. Coluna que morre <b>depois</b> do treino é perigosa: o modelo aprendeu o que cada valor dela queria dizer, e agora recebe sempre o mesmo valor — com um significado que não é mais o de antes.</p>
+  </div>
+  <div class="callout co-warn">
+    <div class="ct">Pergunta para guardar até o Passo 5</div>
+    <p>Se a <code>hi_minutos_extras</code> é inútil, por que não tirá-la junto na versão nova? Pense antes de ler a resposta no Passo 5.</p>
+  </div>
+
+
+</div>
+</div>
+<div class="slide" data-title="Passo 4 · As quatro saídas">
+<div class="slide-inner slide-scroll">
+
+
+  <span class="bloco-mark bl-c">Bloco C · decidir e construir</span>
+  <div class="step-marker">
+    <div class="step-num c">4</div>
+    <div class="step-meta">
+      <span class="step-file">Decidir antes de codar</span>
+      <span class="step-obj">Quatro saídas. Uma é armadilha.</span>
+    </div>
+  </div>
+
+  <div class="hip">
+    <div class="hip-item"><div class="hip-n">1</div><div><h4>Não fazer nada, ou voltar para a v1</h4><p>A v1 também lê a hora extra: volta o problema com um modelo pior. E “não fazer nada” é entregar 711 nomes por mês, para sempre.</p><p class="hip-acao">→ descartada</p></div></div>
+    <div class="hip-item"><div class="hip-n">2</div><div><h4>Consertar a origem</h4><p>Não há o que consertar: o export está certo. Não existe hora extra paga em abril.</p><p class="hip-acao">→ descartada (é a resposta de março, não de abril)</p></div></div>
+    <div class="hip-item"><div class="hip-n">3</div><div><h4>Imputar: preencher com a mediana de março</h4><p>Parece prudente e não exige versão nova — é só um <code>fillna</code> antes do <code>predict</code>.</p><p class="hip-acao">→ medida abaixo. É a pior das quatro.</p></div></div>
+    <div class="hip-item"><div class="hip-n">4</div><div><h4>Retreinar sem o bloco</h4><p>Uma v3 que nunca aprendeu nada com hora extra, treinada no histórico que <b>já tem rótulo</b>.</p><p class="hip-acao">→ o caminho da aula</p></div></div>
+  </div>
+  <div class="card" style="padding:0;overflow:hidden;margin-bottom:18px;">
+    <table class="tbl">
+      <thead><tr><th>simulando abril (hora extra zerada)</th><th>v2 com zeros</th><th>v2 imputando a mediana</th><th>v2 imputando a média</th></tr></thead>
+      <tbody>
+<tr><td>validacao_atual · F1</td><td>0,6653</td><td>0,5971</td><td>0,4467</td></tr>
+<tr><td>validacao_atual · faixa de alerta</td><td>197 de 420</td><td><b style='color:var(--orange)'>0</b></td><td><b style='color:var(--orange)'>0</b></td></tr>
+<tr><td>validacao_congelada · F1</td><td>0,6553</td><td>0,4483</td><td>0,1453</td></tr>
+<tr><td>validacao_congelada · faixa de alerta</td><td>2.064 de 4.800</td><td><b style='color:var(--orange)'>0</b></td><td><b style='color:var(--orange)'>0</b></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout co-err">
+    <div class="ct">Imputar não é neutro</div>
+    <p>Preencher com a mediana diz ao modelo que <b>todo mundo</b> fez a hora extra típica de março. Ele acredita — o valor imputado chega com a mesma cara de um valor medido — e tira todo mundo do grupo de risco. No próprio arquivo de abril, a faixa de alerta vai de 711 para <b>zero</b> (685 em atenção, 715 ok). Você trocou uma mentira por outra, só que na direção oposta.</p>
+  </div>
+
+
+</div>
+</div>
+<div class="slide" data-title="Por que não com abril?">
+<div class="slide-inner slide-scroll">
+
+
+  <span class="otag">a pergunta que alguém vai fazer</span>
+  <h2 class="sec-title">“Então retreina com abril, ué.”</h2>
+  <div class="ev">
+    <div class="ev-item"><div class="ev-n">1</div><div><h4>Abril não tem rótulo</h4><p>O alvo é “pediu para sair com até 3 meses de casa”. Quem entrou em abril só vira 0 ou 1 em <b>julho</b>.</p><p class="ev-conc">Em fevereiro e março o professor liberou o gabarito no meio da aula. Hoje não vai liberar — porque na vida real ele não existe, e a decisão de abril tem que ser tomada em abril.</p></div></div>
+    <div class="ev-item"><div class="ev-n">2</div><div><h4>E mesmo com rótulo, a coluna é constante</h4><p>Uma feature que vale zero para todo mundo não separa ninguém. A árvore nunca vai usá-la para dividir.</p><p class="ev-conc">Misturar abril no treino só ensinaria o modelo que “zero de hora extra” às vezes quer dizer uma coisa e às vezes outra — a pior informação possível.</p></div></div>
+    <div class="ev-item"><div class="ev-n">3</div><div><h4>O histórico rotulado já basta</h4><p>O treino_v1 e fevereiro têm rótulo. Basta treinar sem olhar para as três colunas.</p><p class="ev-conc">E para medir se a v3 vale a pena, dá para <b>simular abril</b> nos conjuntos rotulados: zerar a hora extra neles e comparar os dois modelos nesse mundo. É o Passo 6.</p></div></div>
+  </div>
+
+
+</div>
+</div>
+<div class="slide" data-title="Passo 5 · treinar.py --sem">
+<div class="slide-inner slide-scroll">
+
+  <span class="bloco-mark bl-c">Bloco C · decidir e construir</span>
+  <div class="step-marker">
+    <div class="step-num c">5</div>
+    <div class="step-meta">
+      <span class="step-file">treinar.py</span>
+      <span class="step-obj">Cada versão com a sua lista de features.</span>
+    </div>
+  </div>
+
+  <p class="lead">Até hoje o <code>treinar.py</code> usava <code>config.FEATURES</code> em quatro lugares. A partir de hoje existem <b>duas listas</b>: a do arquivo (<code>config.FEATURES</code>, 15 colunas, não muda) e a do modelo (<code>features</code>, que cada treino escolhe).</p>
+
+  <div class="code-wrap open">
+  <div class="code-header" onclick="toggleCode(this)">
+    <span class="fname">treinar.py · 1 de 3 · logo depois de args = ap.parse_args()</span>
+    <div class="code-right"><span class="lbadge">você escreve</span><button class="copy-btn" onclick="copyCode(event, this)">Copiar</button><span class="code-toggle-btn">Ocultar</span></div>
+  </div>
+  <pre class="code">    ap.add_argument(<span class="s">&quot;--sem&quot;</span>, nargs=<span class="s">&quot;+&quot;</span>, default=[], metavar=<span class="s">&quot;COLUNA&quot;</span>,
+                    help=<span class="s">&quot;features que este modelo NAO vai usar&quot;</span>)
+    args = ap.parse_args()
+
+<span class="c">    # A lista de features deste modelo. Ate a Aula 3 ela era sempre</span>
+<span class="c">    # config.FEATURES; a partir de hoje cada versao pode ter a sua.</span>
+<span class="c">    # config.FEATURES continua sendo o que o ARQUIVO traz. `features` e o que</span>
+<span class="c">    # o MODELO come -- e e ela que vira a signature registrada no MLflow.</span>
+    desconhecidas = [c <span class="k">for</span> c <span class="k">in</span> args.sem <span class="k">if</span> c <span class="k">not</span> <span class="k">in</span> config.FEATURES]
+    <span class="k">if</span> desconhecidas:
+        <span class="k">raise</span> SystemExit(f<span class="s">&quot;--sem com coluna que nao existe: {desconhecidas}&quot;</span>)
+    features = [c <span class="k">for</span> c <span class="k">in</span> config.FEATURES <span class="k">if</span> c <span class="k">not</span> <span class="k">in</span> args.sem]</pre>
+</div>
+
+  <div class="code-wrap open">
+  <div class="code-header" onclick="toggleCode(this)">
+    <span class="fname">treinar.py · 2 de 3 · troque config.FEATURES por features em dois lugares</span>
+    <div class="code-right"><span class="lbadge">você escreve</span><button class="copy-btn" onclick="copyCode(event, this)">Copiar</button><span class="code-toggle-btn">Ocultar</span></div>
+  </div>
+  <pre class="code">    X, y = treino[features], treino[config.COLUNA_ALVO]         <span class="c"> # antes: config.FEATURES</span>
+
+        pred = modelo.predict(conjunto[features])               <span class="c"> # antes: config.FEATURES</span></pre>
+</div>
+
+  <div class="code-wrap open">
+  <div class="code-header" onclick="toggleCode(this)">
+    <span class="fname">treinar.py · 3 de 3 · o registro no MLflow</span>
+    <div class="code-right"><span class="lbadge">você escreve</span><button class="copy-btn" onclick="copyCode(event, this)">Copiar</button><span class="code-toggle-btn">Ocultar</span></div>
+  </div>
+  <pre class="code">            <span class="s">&quot;commit&quot;</span>: commit_atual(),
+            <span class="s">&quot;features_removidas&quot;</span>: <span class="s">&quot;,&quot;</span>.join(args.sem) <span class="k">or</span> <span class="s">&quot;nenhuma&quot;</span>,  <span class="c"> # tag nova</span>
+
+            <span class="s">&quot;n_features&quot;</span>: len(features),                            <span class="c"> # antes: len(config.FEATURES)</span></pre>
+</div>
+  <div class="callout co-info">
+    <div class="ct">Onde config.FEATURES continua — e deve continuar</div>
+    <p>Na linha <code>colunas = [config.COLUNA_ID] + config.FEATURES + [config.COLUNA_ALVO]</code>: o treino ainda <b>lê</b> as 15 colunas do banco. Só não as dá ao <code>.fit()</code>. A signature sai de <code>X</code>, então ela nasce com 12 colunas sozinha.</p>
+  </div>
+
+
+</div>
+</div>
+<div class="slide" data-title="Passo 5 · A v3">
+<div class="slide-inner slide-scroll">
+
+
+  <span class="bloco-mark bl-c">Bloco C · decidir e construir</span>
+  <h2 class="sec-title">A v3 é a v2 menos a hora extra. Só isso.</h2>
+
+  <div class="code-wrap open">
+  <div class="code-header" onclick="toggleCode(this)">
+    <span class="fname">terminal</span>
+    <div class="code-right"><span class="lbadge">rodar</span><button class="copy-btn" onclick="copyCode(event, this)">Copiar</button><span class="code-toggle-btn">Ocultar</span></div>
+  </div>
+  <pre class="code">python treinar.py --incorporar lote_aula2_fev --gabarito gabarito_aula2_fev.csv --motivo feature_morta --sem he_eventos he_referencia_total he_valor_total</pre>
+</div>
+
+  <div class="code-wrap open">
+  <div class="code-header" onclick="toggleCode(this)">
+    <span class="fname">o que aparece</span>
+    <div class="code-right"><span class="lbadge">o que aparece</span><span class="code-toggle-btn">Ocultar</span></div>
+  </div>
+  <pre class="code">treino: 19200 linhas antigas + 980 do lote = 20180
+features: 12 de 15 (sem he_eventos, he_referencia_total, he_valor_total)
+validacao_atual: +420 linhas -&gt; 420 no total
+
+run_id  8bee9c88a14a46808ed4ccacda6e8f39
+versao  3  -&gt;  @challenger
+
+medidas deste candidato:
+  f1_validacao_congelada           0.6842
+  accuracy_validacao_congelada     0.6442
+  precision_validacao_congelada    0.6288
+  recall_validacao_congelada       0.7502
+  f1_validacao_atual               0.6912
+  accuracy_validacao_atual         0.6810
+  precision_validacao_atual        0.6048
+  recall_validacao_atual           0.8065
+
+A producao NAO mudou: @champion continua onde estava.
+Para decidir:  python promover.py --versao 3</pre>
+</div>
+  <div class="callout co-warn">
+    <div class="ct">Por que fevereiro de novo, e não março?</div>
+    <p>Porque a v2 foi treinada com <code>treino_v1</code> + 70% de fevereiro, com a mesma semente. Incorporando fevereiro de novo, a v3 vê <b>exatamente as mesmas linhas</b> — a única diferença entre as duas é a ausência das três colunas. Qualquer diferença de desempenho tem uma causa só. É a regra de março: uma variável de cada vez.</p>
+    <p>Pelo mesmo motivo a <code>hi_minutos_extras</code> fica. Ela é inútil, mas tirá-la junto misturaria duas decisões numa versão. Se quiser, é uma v4 — com o próprio motivo registrado.</p>
+  </div>
+  <div class="callout co-info">
+    <div class="ct">O “+420 linhas → 420 no total”</div>
+    <p>Não é bug. O split de fevereiro com a mesma semente produz as mesmas 420 linhas de validação, e o <code>ON CONFLICT DO NOTHING</code> do <code>acumular_validacao_atual</code> não duplica ninguém. O <code>+420</code> é o que foi oferecido ao banco; o total mostra que nada entrou.</p>
+  </div>
+
+
+</div>
+</div>
+<div class="slide" data-title="Passo 6 · O portão quebra">
+<div class="slide-inner slide-scroll">
+
+  <span class="bloco-mark bl-c">Bloco C · decidir e construir</span>
+  <div class="step-marker">
+    <div class="step-num c">6</div>
+    <div class="step-meta">
+      <span class="step-file">promover.py</span>
+      <span class="step-obj">Rode primeiro. Leia o erro.</span>
+    </div>
+  </div>
+
+  <div class="code-wrap open">
+  <div class="code-header" onclick="toggleCode(this)">
+    <span class="fname">terminal</span>
+    <div class="code-right"><span class="lbadge">rodar</span><button class="copy-btn" onclick="copyCode(event, this)">Copiar</button><span class="code-toggle-btn">Ocultar</span></div>
+  </div>
+  <pre class="code">python promover.py --versao 3 --validacao validacao_atual</pre>
+</div>
+
+  <div class="code-wrap open">
+  <div class="code-header" onclick="toggleCode(this)">
+    <span class="fname">o que aparece</span>
+    <div class="code-right"><span class="lbadge">o que aparece</span><span class="code-toggle-btn">Ocultar</span></div>
+  </div>
+  <pre class="code">Traceback (most recent call last):
+  File &quot;/home/claude/amb/turnover_mlops/promover.py&quot;, line 159, in &lt;module&gt;
+    main()
+  File &quot;/home/claude/amb/turnover_mlops/promover.py&quot;, line 83, in main
+    &quot;candidato&quot;: medir(candidato, conjunto),
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File &quot;/home/claude/amb/turnover_mlops/promover.py&quot;, line 32, in medir
+    pred = modelo.predict(conjunto[config.FEATURES])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File &quot;/usr/local/lib/python3.12/dist-packages/sklearn/ensemble/_forest.py&quot;, line 903, in predict
+    proba = self.predict_proba(X)
+            ^^^^^^^^^^^^^^^^^^^^^
+  File &quot;/usr/local/lib/python3.12/dist-packages/sklearn/ensemble/_forest.py&quot;, line 945, in predict_proba
+    X = self._validate_X_predict(X)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File &quot;/usr/local/lib/python3.12/dist-packages/sklearn/ensemble/_forest.py&quot;, line 637, in _validate_X_predict
+    X = validate_data(
+        ^^^^^^^^^^^^^^
+  File &quot;/usr/local/lib/python3.12/dist-packages/sklearn/utils/validation.py&quot;, line 2877, in validate_data
+    _check_feature_names(_estimator, X, reset=reset)
+  File &quot;/usr/local/lib/python3.12/dist-packages/sklearn/utils/validation.py&quot;, line 2729, in _check_feature_names
+    raise ValueError(message)
+ValueError: The feature names should match those that were passed during fit.
+Feature names unseen at fit time:
+- he_eventos
+- he_referencia_total
+- he_valor_total</pre>
+</div>
+  <div class="callout co-err">
+    <div class="ct">O que o erro está dizendo</div>
+    <p><code>medir()</code> entrega <code>conjunto[config.FEATURES]</code> — 15 colunas — a um modelo treinado com 12. O sklearn guarda os nomes das colunas do <code>.fit()</code> em <code>feature_names_in_</code> e recusa qualquer coisa diferente. <b>Ainda bem</b>: se ele casasse as colunas por posição, bastaria o número bater para um modelo ler uma coluna no lugar de outra, sem erro nenhum.</p>
+    <p>Até hoje isso nunca apareceu porque v1 e v2 comiam as mesmas 15 colunas. O código estava certo por coincidência.</p>
+  </div>
+
+
+</div>
+</div>
+<div class="slide" data-title="Passo 6 · promover.py">
+<div class="slide-inner slide-scroll">
+
+
+  <span class="bloco-mark bl-c">Bloco C · decidir e construir</span>
+  <h2 class="sec-title">Substitua o promover.py inteiro</h2>
+  <p class="lead">As mudanças estão espalhadas em seis pontos do arquivo, e errar um deles faz o portão medir os modelos no mundo errado sem dar erro nenhum. Por isso, hoje, não edite: <b>apague o conteúdo do seu <code>promover.py</code> e cole o arquivo abaixo inteiro</b>. Depois leia o quadro do que mudou.</p>
+
+  <div class="code-wrap open">
+  <div class="code-header" onclick="toggleCode(this)">
+    <span class="fname">promover.py · arquivo completo</span>
+    <div class="code-right"><span class="lbadge">você copia · arquivo inteiro</span><button class="copy-btn" onclick="copyCode(event, this)">Copiar</button><span class="code-toggle-btn">Ocultar</span></div>
+  </div>
+  <pre class="code"><span class="s">&quot;&quot;&quot;</span>
+<span class="s">O portao. Decide se o @challenger vira @champion.</span>
+<span class="s"></span>
+<span class="s">    python promover.py --versao 2</span>
+<span class="s">    python promover.py --versao 2 --validacao validacao_atual</span>
+<span class="s">    python promover.py --versao 3 --validacao validacao_atual --zerar he_eventos he_referencia_total he_valor_total</span>
+<span class="s"></span>
+<span class="s">Regra unica e nao negociavel: os dois modelos sao medidos NO MESMO CONJUNTO.</span>
+<span class="s">Comparar em conjuntos diferentes e a forma mais comum de promover um modelo</span>
+<span class="s">pior sem perceber.</span>
+<span class="s"></span>
+<span class="s">Aula 4: cada modelo e medido com as PROPRIAS colunas (feature_names_in_), e o</span>
+<span class="s">--zerar mede os dois no mundo em que a coluna morreu: o conjunto rotulado com</span>
+<span class="s">essas colunas zeradas, como elas chegam hoje em producao.</span>
+<span class="s"></span>
+<span class="s">Qual conjunto usar, isso sim e decisao sua -- e fica registrada na tag</span>
+<span class="s">`validado_em` da versao promovida. Um conjunto de teste representa uma</span>
+<span class="s">populacao; se a populacao mudou, ele envelheceu junto com ela.</span>
+<span class="s">&quot;&quot;&quot;</span>
+<span class="k">import</span> argparse
+
+<span class="k">import</span> mlflow
+<span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> mlflow.tracking <span class="k">import</span> MlflowClient
+<span class="k">from</span> sklearn.metrics <span class="k">import</span> accuracy_score, f1_score, precision_score, recall_score
+
+<span class="k">import</span> config
+<span class="k">from</span> app <span class="k">import</span> banco
+
+CONJUNTOS = {
+    <span class="s">&quot;validacao_congelada&quot;</span>: config.TABELA_VALIDACAO,
+    <span class="s">&quot;validacao_atual&quot;</span>: config.TABELA_VALIDACAO_ATUAL,
+}
+
+
+<span class="k">def</span> medir(modelo, conjunto):
+<span class="c">    # Cada modelo pega as colunas com que FOI treinado, na ordem em que foi</span>
+<span class="c">    # treinado. O sklearn guarda essa lista no proprio objeto desde o .fit().</span>
+<span class="c">    # Ate a Aula 3 isto era config.FEATURES -- e funcionava porque todas as</span>
+<span class="c">    # versoes comiam as mesmas 15 colunas. A v3 come 12.</span>
+    pred = modelo.predict(conjunto[list(modelo.feature_names_in_)])
+    real = conjunto[config.COLUNA_ALVO]
+    <span class="k">return</span> {
+        <span class="s">&quot;f1&quot;</span>: f1_score(real, pred),
+        <span class="s">&quot;accuracy&quot;</span>: accuracy_score(real, pred),
+        <span class="s">&quot;precision&quot;</span>: precision_score(real, pred),
+        <span class="s">&quot;recall&quot;</span>: recall_score(real, pred),
+        <span class="s">&quot;taxa_predicao_positiva&quot;</span>: float(pred.mean()),
+    }
+
+
+<span class="k">def</span> simular(conjunto, zerar):
+<span class="s">    &quot;&quot;&quot;Devolve o conjunto como ele chegaria HOJE em producao.</span>
+<span class="s"></span>
+<span class="s">    As colunas em `zerar` morreram na origem: vem no arquivo, mas 100% zeradas.</span>
+<span class="s">    O campeao continua lendo essas colunas -- e e com elas zeradas que ele vai</span>
+<span class="s">    trabalhar a partir de agora. Medir o campeao no conjunto intacto seria</span>
+<span class="s">    medir um modelo num mundo que nao existe mais.</span>
+<span class="s"></span>
+<span class="s">    O rotulo do mes novo leva tres meses. O conjunto rotulado que ja existe,</span>
+<span class="s">    com as colunas zeradas, e o melhor retrato de abril que da para ter hoje.</span>
+<span class="s">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="k">not</span> zerar:
+        <span class="k">return</span> conjunto
+    <span class="k">return</span> conjunto.assign(**{coluna: 0.0 <span class="k">for</span> coluna <span class="k">in</span> zerar})
+
+
+<span class="k">def</span> main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument(<span class="s">&quot;--versao&quot;</span>, required=True, help=<span class="s">&quot;versao candidata&quot;</span>)
+    ap.add_argument(<span class="s">&quot;--validacao&quot;</span>, default=<span class="s">&quot;validacao_congelada&quot;</span>,
+                    choices=list(CONJUNTOS))
+    ap.add_argument(<span class="s">&quot;--zerar&quot;</span>, nargs=<span class="s">&quot;+&quot;</span>, default=[], metavar=<span class="s">&quot;COLUNA&quot;</span>,
+                    help=<span class="s">&quot;colunas que chegam zeradas em producao: os dois &quot;</span>
+                         <span class="s">&quot;modelos sao medidos nesse mundo&quot;</span>)
+    ap.add_argument(<span class="s">&quot;--forcar&quot;</span>, action=<span class="s">&quot;store_true&quot;</span>,
+                    help=<span class="s">&quot;promove mesmo reprovado. Fica registrado como tal&quot;</span>)
+    args = ap.parse_args()
+    desconhecidas = [c <span class="k">for</span> c <span class="k">in</span> args.zerar <span class="k">if</span> c <span class="k">not</span> <span class="k">in</span> config.FEATURES]
+    <span class="k">if</span> desconhecidas:
+        <span class="k">raise</span> SystemExit(f<span class="s">&quot;--zerar com coluna que nao existe: {desconhecidas}&quot;</span>)
+
+    mlflow.set_tracking_uri(config.URI_TRACKING)
+<span class="c">    # Sem set_experiment, o run cai no experimento &quot;Default&quot; -- fora da gaveta</span>
+<span class="c">    # onde vive o resto do historico do modelo. A decisao de promocao faz</span>
+<span class="c">    # parte desse historico tanto quanto o treino.</span>
+    mlflow.set_experiment(config.NOME_EXPERIMENTO)
+    cliente = MlflowClient()
+
+    campeao_versao = cliente.get_model_version_by_alias(
+        config.NOME_MODELO, config.ALIAS_PROD).version
+    <span class="k">if</span> campeao_versao == args.versao:
+        <span class="k">raise</span> SystemExit(f<span class="s">&quot;a versao {args.versao} JA e o @{config.ALIAS_PROD}.&quot;</span>)
+
+<span class="c">    # Carrega os dois modelos POR NUMERO DE VERSAO, nao por alias: precisamos</span>
+<span class="c">    # do campeao atual e do candidato, e o alias do candidato pode nem existir.</span>
+    campeao = mlflow.sklearn.load_model(
+        f<span class="s">&quot;models:/{config.NOME_MODELO}/{campeao_versao}&quot;</span>)
+    candidato = mlflow.sklearn.load_model(
+        f<span class="s">&quot;models:/{config.NOME_MODELO}/{args.versao}&quot;</span>)
+
+<span class="c">    # Mede nos DOIS conjuntos, sempre. Promover e uma troca: o numero que</span>
+<span class="c">    # voce ganha de um lado costuma custar algo do outro, e esconder o custo</span>
+<span class="c">    # e a forma mais elegante de tomar uma decisao ruim.</span>
+    resultado = {}
+    <span class="k">for</span> nome, tabela_sql <span class="k">in</span> CONJUNTOS.items():
+        conjunto = banco.carregar_conjunto(tabela_sql)
+        <span class="k">if</span> conjunto.empty:
+            continue
+        mundo = simular(conjunto, args.zerar)
+        resultado[nome] = {
+            <span class="s">&quot;linhas&quot;</span>: len(conjunto),
+            <span class="s">&quot;alvo&quot;</span>: conjunto[config.COLUNA_ALVO].mean(),
+            <span class="s">&quot;campeao&quot;</span>: medir(campeao, mundo),
+            <span class="s">&quot;candidato&quot;</span>: medir(candidato, mundo),
+        }
+        <span class="k">if</span> args.zerar:
+<span class="c">            # So para o registro: quanto o campeao perdeu quando a coluna</span>
+<span class="c">            # morreu. NAO entra na decisao -- esse mundo acabou.</span>
+            resultado[nome][<span class="s">&quot;campeao_antes&quot;</span>] = medir(campeao, conjunto)
+    <span class="k">if</span> args.validacao <span class="k">not</span> <span class="k">in</span> resultado:
+        <span class="k">raise</span> SystemExit(f<span class="s">&quot;&#x27;{args.validacao}&#x27; esta vazio. &quot;</span>
+                         f<span class="s">&quot;Rode o treinar.py antes.&quot;</span>)
+
+    <span class="k">for</span> nome, r <span class="k">in</span> resultado.items():
+        decide = <span class="s">&quot; &lt;- DECIDE&quot;</span> <span class="k">if</span> nome == args.validacao <span class="k">else</span> <span class="s">&quot;&quot;</span>
+        print(f<span class="s">&quot;\n{nome}  ({r[&#x27;linhas&#x27;]} linhas, alvo em {r[&#x27;alvo&#x27;]:.1%})&quot;</span>
+              f<span class="s">&quot;{decide}&quot;</span>)
+        colunas = {}
+        <span class="k">if</span> <span class="s">&quot;campeao_antes&quot;</span> <span class="k">in</span> r:
+            colunas[f<span class="s">&quot;v{campeao_versao} antes&quot;</span>] = r[<span class="s">&quot;campeao_antes&quot;</span>]
+            colunas[f<span class="s">&quot;v{campeao_versao} zerada&quot;</span>] = r[<span class="s">&quot;campeao&quot;</span>]
+        <span class="k">else</span>:
+            colunas[f<span class="s">&quot;campeao v{campeao_versao}&quot;</span>] = r[<span class="s">&quot;campeao&quot;</span>]
+        colunas[f<span class="s">&quot;candidato v{args.versao}&quot;</span>] = r[<span class="s">&quot;candidato&quot;</span>]
+        print(pd.DataFrame(colunas).round(4).to_string())
+        d = r[<span class="s">&quot;candidato&quot;</span>][<span class="s">&quot;f1&quot;</span>] - r[<span class="s">&quot;campeao&quot;</span>][<span class="s">&quot;f1&quot;</span>]
+        print(f<span class="s">&quot;  ganho de f1   {d:+.4f}&quot;</span>)
+
+    ganho = (resultado[args.validacao][<span class="s">&quot;candidato&quot;</span>][<span class="s">&quot;f1&quot;</span>]
+             - resultado[args.validacao][<span class="s">&quot;campeao&quot;</span>][<span class="s">&quot;f1&quot;</span>])
+    aprovado = ganho &gt;= config.GANHO_MINIMO
+    veredito = <span class="s">&quot;APROVADO&quot;</span> <span class="k">if</span> aprovado <span class="k">else</span> <span class="s">&quot;REPROVADO&quot;</span>
+
+    print(f<span class="s">&quot;\n{&#x27;-&#x27; * 58}&quot;</span>)
+    print(f<span class="s">&quot;decidido em      {args.validacao}&quot;</span>)
+    <span class="k">if</span> args.zerar:
+        print(f<span class="s">&quot;com zeradas      {&#x27;, &#x27;.join(args.zerar)}&quot;</span>)
+    print(f<span class="s">&quot;ganho de f1      {ganho:+.4f}   (minimo exigido &quot;</span>
+          f<span class="s">&quot;{config.GANHO_MINIMO:+.4f})&quot;</span>)
+    print(f<span class="s">&quot;veredito         {veredito}&quot;</span>)
+    outro = next((n <span class="k">for</span> n <span class="k">in</span> resultado <span class="k">if</span> n != args.validacao), None)
+    <span class="k">if</span> outro:
+        d = (resultado[outro][<span class="s">&quot;candidato&quot;</span>][<span class="s">&quot;f1&quot;</span>]
+             - resultado[outro][<span class="s">&quot;campeao&quot;</span>][<span class="s">&quot;f1&quot;</span>])
+        rotulo = <span class="s">&quot;ganho&quot;</span> <span class="k">if</span> d &gt;= 0 <span class="k">else</span> <span class="s">&quot;custo&quot;</span>
+        print(f<span class="s">&quot;{rotulo} em {outro}   {d:+.4f}   &lt;- a outra metade da decisao&quot;</span>)
+
+    <span class="k">with</span> mlflow.start_run(run_name=f<span class="s">&quot;promocao_v{args.versao}_{args.validacao}&quot;</span>):
+        mlflow.set_tags({
+            <span class="s">&quot;tipo&quot;</span>: <span class="s">&quot;promocao&quot;</span>,
+            <span class="s">&quot;versao_candidata&quot;</span>: args.versao,
+            <span class="s">&quot;versao_campeao&quot;</span>: campeao_versao,
+            <span class="s">&quot;validado_em&quot;</span>: args.validacao,
+            <span class="s">&quot;veredito&quot;</span>: veredito.lower(),
+            <span class="s">&quot;forcado&quot;</span>: str(args.forcar).lower(),
+            <span class="s">&quot;simulado_com_zeradas&quot;</span>: <span class="s">&quot;,&quot;</span>.join(args.zerar) <span class="k">or</span> <span class="s">&quot;nenhuma&quot;</span>,
+        })
+        mlflow.log_params({
+            <span class="s">&quot;validacao&quot;</span>: args.validacao,
+            <span class="s">&quot;linhas_validacao&quot;</span>: resultado[args.validacao][<span class="s">&quot;linhas&quot;</span>],
+            <span class="s">&quot;ganho_minimo&quot;</span>: config.GANHO_MINIMO})
+<span class="c">        # Metricas dos dois conjuntos no mesmo run: quem abrir isso em seis</span>
+<span class="c">        # meses ve o ganho E o custo, nao so o numero que justificou a decisao.</span>
+        <span class="k">for</span> nome, r <span class="k">in</span> resultado.items():
+            mlflow.log_metrics({
+                **{f<span class="s">&quot;{nome}_campeao_{k}&quot;</span>: v <span class="k">for</span> k, v <span class="k">in</span> r[<span class="s">&quot;campeao&quot;</span>].items()},
+                **{f<span class="s">&quot;{nome}_candidato_{k}&quot;</span>: v <span class="k">for</span> k, v <span class="k">in</span> r[<span class="s">&quot;candidato&quot;</span>].items()},
+                f<span class="s">&quot;{nome}_ganho_f1&quot;</span>: (r[<span class="s">&quot;candidato&quot;</span>][<span class="s">&quot;f1&quot;</span>] - r[<span class="s">&quot;campeao&quot;</span>][<span class="s">&quot;f1&quot;</span>]),
+            })
+            <span class="k">if</span> <span class="s">&quot;campeao_antes&quot;</span> <span class="k">in</span> r:
+                mlflow.log_metrics({f<span class="s">&quot;{nome}_campeao_antes_{k}&quot;</span>: v
+                                    <span class="k">for</span> k, v <span class="k">in</span> r[<span class="s">&quot;campeao_antes&quot;</span>].items()})
+        mlflow.log_metric(<span class="s">&quot;ganho_f1&quot;</span>, ganho)
+
+    <span class="k">if</span> <span class="k">not</span> aprovado <span class="k">and</span> <span class="k">not</span> args.forcar:
+        print(f<span class="s">&quot;\nA producao NAO mudou. @{config.ALIAS_PROD} segue na &quot;</span>
+              f<span class="s">&quot;v{campeao_versao}.&quot;</span>)
+        print(<span class="s">&quot;Antes de forcar, responda: este conjunto representa a &quot;</span>
+              <span class="s">&quot;populacao que o modelo vai atender?&quot;</span>)
+        <span class="k">return</span>
+
+    cliente.set_registered_model_alias(
+        config.NOME_MODELO, config.ALIAS_PROD, args.versao)
+    cliente.set_model_version_tag(
+        config.NOME_MODELO, args.versao, <span class="s">&quot;validado_em&quot;</span>, args.validacao)
+    cliente.delete_registered_model_alias(
+        config.NOME_MODELO, config.ALIAS_CANDIDATO)
+
+    print(f<span class="s">&quot;\n@{config.ALIAS_PROD}  v{campeao_versao} -&gt; v{args.versao}&quot;</span>)
+    print(<span class="s">&quot;Clique em &#x27;Recarregar modelo&#x27; no front para a API pegar a troca.&quot;</span>)
+
+
+<span class="k">if</span> __name__ == <span class="s">&quot;__main__&quot;</span>:
+    main()</pre>
+</div>
+
+  <h3 class="slide-h3" style="margin-top:20px">O que mudou, e por quê</h3>
+  <div class="card" style="padding:0;overflow:hidden;margin-bottom:18px;">
+    <table class="tbl">
+      <thead><tr><th>onde</th><th>o que mudou</th><th>por quê</th></tr></thead>
+      <tbody>
+<tr><td><code>medir()</code></td><td><code>config.FEATURES</code> → <code>modelo.feature_names_in_</code></td><td>Cada modelo é medido com as colunas com que foi treinado: 15 para a v2, 12 para a v3. É o conserto do erro do slide anterior. O <code>feature_names_in_</code> é do scikit-learn: o <code>.fit()</code> guarda os nomes das colunas no próprio objeto.</td></tr>
+<tr><td><code>simular()</code></td><td>função nova</td><td>Devolve o conjunto rotulado com as colunas mortas zeradas — o retrato de abril que existe hoje, sem esperar o rótulo de julho.</td></tr>
+<tr><td>argumentos</td><td><code>--zerar</code> e a checagem de nomes</td><td>Diz quais colunas morreram. A checagem para o script se houver erro de digitação; sem ela, um nome errado não zeraria nada e a comparação sairia no mundo de março.</td></tr>
+<tr><td>laço dos conjuntos</td><td>os dois modelos medidos em <code>mundo</code>; o campeão também em <code>conjunto</code></td><td>A decisão compara v2 e v3 em abril. A medida do campeão no conjunto original (<code>campeao_antes</code>) só mostra o estrago: não entra na decisão.</td></tr>
+<tr><td>impressão</td><td>tabela com três colunas quando há <code>--zerar</code></td><td>“v2 antes → v2 zerada” é o estrago; “v2 zerada → v3” é a recuperação. Sem <code>--zerar</code>, a tabela sai igual à das aulas anteriores.</td></tr>
+<tr><td>MLflow</td><td>tag <code>simulado_com_zeradas</code> e as métricas do <code>campeao_antes</code></td><td>Quem abrir o run em julho sabe em que mundo a promoção foi decidida.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout co-ok">
+    <div class="ct">A regra de sempre continua de pé</div>
+    <p>“Os dois modelos são medidos no mesmo conjunto.” Continua verdade — só que agora o mesmo conjunto é <b>o conjunto como ele chega em abril</b>. A v3 nem olha para as colunas zeradas; a v2 olha e recebe zero, como vai receber em produção.</p>
+    <p>Sem <code>--zerar</code>, o arquivo novo se comporta exatamente como o antigo. Nada do que foi feito nas Aulas 2 e 3 muda.</p>
+  </div>
+
+
+</div>
+</div>
+<div class="slide" data-title="Passo 6 · O veredito">
+<div class="slide-inner slide-scroll">
+
+
+  <span class="bloco-mark bl-c">Bloco C · decidir e construir</span>
+  <h2 class="sec-title">Três colunas: o estrago, e o quanto a v3 recupera</h2>
+
+  <div class="code-wrap open">
+  <div class="code-header" onclick="toggleCode(this)">
+    <span class="fname">terminal</span>
+    <div class="code-right"><span class="lbadge">rodar</span><button class="copy-btn" onclick="copyCode(event, this)">Copiar</button><span class="code-toggle-btn">Ocultar</span></div>
+  </div>
+  <pre class="code">python promover.py --versao 3 --validacao validacao_atual --zerar he_eventos he_referencia_total he_valor_total</pre>
+</div>
+
+  <div class="code-wrap open">
+  <div class="code-header" onclick="toggleCode(this)">
+    <span class="fname">o que aparece</span>
+    <div class="code-right"><span class="lbadge">o que aparece</span><span class="code-toggle-btn">Ocultar</span></div>
+  </div>
+  <pre class="code">validacao_congelada  (4800 linhas, alvo em 51.4%)
+                        v2 antes  v2 zerada  candidato v3
+f1                        0.6779     0.6553        0.6842
+accuracy                  0.6402     0.6279        0.6442
+precision                 0.6276     0.6252        0.6288
+recall                    0.7368     0.6886        0.7502
+taxa_predicao_positiva    0.6031     0.5658        0.6129
+  ganho de f1   +0.0288
+
+validacao_atual  (420 linhas, alvo em 44.3%) &lt;- DECIDE
+                        v2 antes  v2 zerada  candidato v3
+f1                        0.6718     0.6653        0.6912
+accuracy                  0.6976     0.6048        0.6810
+precision                 0.6468     0.5323        0.6048
+recall                    0.6989     0.8871        0.8065
+taxa_predicao_positiva    0.4786     0.7381        0.5905
+  ganho de f1   +0.0259
+
+----------------------------------------------------------
+decidido em      validacao_atual
+com zeradas      he_eventos, he_referencia_total, he_valor_total
+ganho de f1      +0.0259   (minimo exigido +0.0050)
+veredito         APROVADO
+ganho em validacao_congelada   +0.0288   &lt;- a outra metade da decisao
+
+@champion  v2 -&gt; v3
+Clique em &#x27;Recarregar modelo&#x27; no front para a API pegar a troca.</pre>
+</div>
+
+  <div class="ev">
+    <div class="ev-item"><div class="ev-n">1</div><div><h4>“v2 antes” → “v2 zerada”: o estrago</h4><p>Na validação atual, a taxa de predição positiva vai de 0,48 para 0,74 e a precision cai de 0,65 para 0,53.</p><p class="ev-conc">É a explosão de abril, reproduzida num conjunto com rótulo, <b>três meses antes de o rótulo de abril existir</b>.</p></div></div>
+    <div class="ev-item"><div class="ev-n">2</div><div><h4>“v2 zerada” → “v3”: a recuperação</h4><p>+0,0259 na atual (decide) e +0,0288 na congelada. APROVADO nos dois.</p><p class="ev-conc">Na congelada a v3 em abril (0,6842) chega a passar a v2 em março (0,6779). A hora extra já não carregava tanto quanto parecia; o que a v2 sofre é ler errado o zero.</p></div></div>
+  </div>
+  <div class="callout co-warn">
+    <div class="ct">E sem o --zerar?</div>
+    <p>Rodando sem ele, a v3 também seria aprovada: ela compararia com a “v2 antes”. <b>A decisão sairia certa por sorte</b> — contra um campeão num mundo que acabou. Com uma coluna morta menos importante, o mesmo atalho reprovaria o candidato certo. E a tag <code>simulado_com_zeradas</code> é o que vai contar, em julho, em que mundo esta decisão foi tomada.</p>
+  </div>
+
+
+</div>
+</div>
+<div class="slide" data-title="Passo 7 · Recarregar">
+<div class="slide-inner slide-scroll">
+
+  <span class="bloco-mark bl-c">Bloco C · decidir e construir</span>
+  <div class="step-marker">
+    <div class="step-num c">7</div>
+    <div class="step-meta">
+      <span class="step-file">O front</span>
+      <span class="step-obj">Recarregar modelo, e enviar abril de novo.</span>
+    </div>
+  </div>
+
+  <p class="lead">Clique em <b>Recarregar modelo</b>. O cabeçalho muda para <code>modelo v3 · @champion · 12 features</code>. Tudo certo. Agora envie <code>lote_aula4_abr.csv</code> de novo.</p>
+  <div class="callout co-err">
+    <div class="ct">O front fica em “pontuando…” e não sai mais daí</div>
+    <p>A API respondeu <code>500 Internal Server Error</code>, que não é JSON, e o front não trata esse caso. Para o RH, o sistema simplesmente parou. O motivo está no terminal do uvicorn:</p>
+  </div>
+
+  <div class="code-wrap open">
+  <div class="code-header" onclick="toggleCode(this)">
+    <span class="fname">terminal do uvicorn</span>
+    <div class="code-right"><span class="lbadge">o que aparece</span><span class="code-toggle-btn">Ocultar</span></div>
+  </div>
+  <pre class="code">  File &quot;/usr/local/lib/python3.12/dist-packages/fastapi/routing.py&quot;, line 352, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File &quot;/home/claude/amb/turnover_mlops/app/main.py&quot;, line 200, in lote
+    prob, classe = pontuar(df)
+                   ^^^^^^^^^^^
+  File &quot;/home/claude/amb/turnover_mlops/app/main.py&quot;, line 111, in pontuar
+    prob = MODELO.predict_proba(X)[:, 1]
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File &quot;/usr/local/lib/python3.12/dist-packages/sklearn/ensemble/_forest.py&quot;, line 945, in predict_proba
+    X = self._validate_X_predict(X)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File &quot;/usr/local/lib/python3.12/dist-packages/sklearn/ensemble/_forest.py&quot;, line 637, in _validate_X_predict
+    X = validate_data(
+        ^^^^^^^^^^^^^^
+  File &quot;/usr/local/lib/python3.12/dist-packages/sklearn/utils/validation.py&quot;, line 2877, in validate_data
+    _check_feature_names(_estimator, X, reset=reset)
+  File &quot;/usr/local/lib/python3.12/dist-packages/sklearn/utils/validation.py&quot;, line 2729, in _check_feature_names
+    raise ValueError(message)
+ValueError: The feature names should match those that were passed during fit.
+Feature names unseen at fit time:
+- he_eventos
+- he_referencia_total
+- he_valor_total</pre>
+</div>
+  <div class="callout co-info">
+    <div class="ct">O cabeçalho está certo e a API está quebrada — ao mesmo tempo</div>
+    <p>O cabeçalho mostra <code>12 features</code> porque lê <code>COLUNAS_CONTRATO</code>, que o <code>carregar_modelo()</code> tira da <b>signature</b> da versão no registry. O <code>pontuar()</code> quebra porque lê <code>config.FEATURES</code>. <b>Duas fontes da verdade para a mesma pergunta</b>, e até hoje elas concordavam por coincidência.</p>
+    <p>A produção está fora do ar. Em produção de verdade, a primeira ação seria reverter o alias para a v2 — isso é o Passo 8. Aqui, conserte direto: é uma linha.</p>
+  </div>
+
+
+</div>
+</div>
+<div class="slide" data-title="Passo 7 · Uma linha">
+<div class="slide-inner slide-scroll">
+
+
+  <span class="bloco-mark bl-c">Bloco C · decidir e construir</span>
+  <h2 class="sec-title">app/main.py: o pontuar() passa a perguntar ao modelo</h2>
+
+  <div class="code-wrap open">
+  <div class="code-header" onclick="toggleCode(this)">
+    <span class="fname">app/main.py · dentro de pontuar()</span>
+    <div class="code-right"><span class="lbadge">você escreve · uma linha</span><button class="copy-btn" onclick="copyCode(event, this)">Copiar</button><span class="code-toggle-btn">Ocultar</span></div>
+  </div>
+  <pre class="code"><span class="k">def</span> pontuar(df):
+<span class="s">    &quot;&quot;&quot;Aplica o modelo. Nunca chama fit -- treinar em producao e outra coisa.</span>
+<span class="s"></span>
+<span class="s">    As colunas vem da SIGNATURE da versao carregada, nao do config. O arquivo</span>
+<span class="s">    continua trazendo as 15 (config.FEATURES, que vai inteiro para o JSONB);</span>
+<span class="s">    cada versao pega so as que conhece.</span>
+<span class="s">    &quot;&quot;&quot;</span>
+    X = df[COLUNAS_CONTRATO]                   <span class="c"> # antes: df[config.FEATURES]</span></pre>
+</div>
+
+  <p class="lead">Salve. O <code>--reload</code> reinicia o uvicorn, e o boot carrega o <code>@champion</code> de novo — a v3. Envie abril outra vez pelo front e confira o resumo da lista:</p>
+  <div class="card" style="padding:0;overflow:hidden;margin-bottom:18px;">
+    <table class="tbl">
+      <thead><tr><th>lote_aula4_abr</th><th>taxa positiva</th><th>alerta</th><th>atenção</th><th>ok</th></tr></thead>
+      <tbody>
+<tr><td>v2 (hora extra zerada)</td><td>0,7607</td><td>711</td><td>354</td><td>335</td></tr>
+<tr><td><b>v3 (sem hora extra)</b></td><td><b>0,6979</b></td><td><b>581</b></td><td>396</td><td>423</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout co-info">
+    <div class="ct">Por que a outra linha, a do JSONB, continua com config.FEATURES</div>
+    <p>Em <code>entradas=df[config.FEATURES].to_dict(...)</code> o banco guarda <b>o que chegou</b>, não o que o modelo usou. É por guardar as 15 que o <code>monitorar.py</code> ainda enxerga a hora extra morta — e vai enxergar o dia em que ela voltar. A Aula 1 deixou um comentário no <code>carregar_modelo()</code>: <i>“isso vale ouro na Aula 4”</i>. Era isto.</p>
+  </div>
+
+
+</div>
+</div>
+<div class="slide" data-title="Passo 8 · A reversão">
+<div class="slide-inner slide-scroll">
+
+  <span class="bloco-mark bl-c">Bloco C · decidir e construir</span>
+  <div class="step-marker">
+    <div class="step-num c">8</div>
+    <div class="step-meta">
+      <span class="step-file">MLflow UI + front</span>
+      <span class="step-obj">Prove que a v2 ainda sobe.</span>
+    </div>
+  </div>
+
+  <p class="lead">Uma troca de contrato só está pronta quando a volta também funciona. No MLflow, abra <b>Models → turnover_rh → Version 2</b> e mova o alias <code>champion</code> para ela. No front, <b>Recarregar modelo</b>, e faça uma previsão avulsa. Depois devolva o alias para a v3 e recarregue.</p>
+
+  <div class="code-wrap open">
+  <div class="code-header" onclick="toggleCode(this)">
+    <span class="fname">a mesma pessoa, nas duas versões (previsão avulsa)</span>
+    <div class="code-right"><span class="lbadge">o que aparece</span><span class="code-toggle-btn">Ocultar</span></div>
+  </div>
+  <pre class="code">alias -&gt; v2 | saude: v2 15 features | prever: {&#x27;id_pessoa&#x27;: &#x27;teste-reversao&#x27;, &#x27;probabilidade&#x27;: 0.4883, &#x27;classe&#x27;: 0, &#x27;faixa&#x27;: &#x27;ok&#x27;, &#x27;limiar&#x27;: 0.5, &#x27;versao_modelo&#x27;: &#x27;2&#x27;}
+alias -&gt; v3 | saude: v3 12 features | prever: {&#x27;id_pessoa&#x27;: &#x27;teste-reversao&#x27;, &#x27;probabilidade&#x27;: 0.6265, &#x27;classe&#x27;: 1, &#x27;faixa&#x27;: &#x27;alerta&#x27;, &#x27;limiar&#x27;: 0.5, &#x27;versao_modelo&#x27;: &#x27;3&#x27;}</pre>
+</div>
+
+  <div class="ev">
+    <div class="ev-item"><div class="ev-n">1</div><div><h4>As duas versões atendem a mesma API</h4><p>v2 com 15 colunas, v3 com 12, o mesmo formulário e o mesmo arquivo.</p><p class="ev-conc">Sem a linha do Passo 7, a volta para a v2 funcionaria — e a ida para a v3 derrubaria a produção. Com a linha, as duas direções funcionam. <b>A lista de features viaja com o modelo, não com o projeto.</b></p></div></div>
+    <div class="ev-item"><div class="ev-n">2</div><div><h4>A mesma pessoa, dois veredictos</h4><p>Ela tem 12 lançamentos de hora extra. A v2 a põe em <b>ok</b> (0,49); a v3, em <b>alerta</b> (0,63).</p><p class="ev-conc">A v3 não enxerga a hora extra, nem quando ela existe. É o preço que ela paga por não ser enganada quando a hora extra não existe mais.</p></div></div>
+  </div>
+  <div class="callout co-warn">
+    <div class="ct">Termine com o alias na v3</div>
+    <p>Confira o cabeçalho: <code>modelo v3 · @champion · 12 features</code>.</p>
+  </div>
+
+
+</div>
+</div>
+<div class="slide" data-title="A resposta para a Marina">
+<div class="slide-inner slide-scroll">
+
+
+  <span class="otag">o que você leva para o RH</span>
+  <h2 class="sec-title">711 viraram 581. Não vão virar 165.</h2>
+  <div class="card" style="padding:0;overflow:hidden;margin-bottom:18px;">
+    <table class="tbl">
+      <thead><tr><th></th><th>março (v2)</th><th>abril (v2)</th><th>abril (v3)</th></tr></thead>
+      <tbody>
+<tr><td>faixa de alerta</td><td>165</td><td>711</td><td><b>581</b></td></tr>
+<tr><td>faixa de atenção</td><td>573</td><td>354</td><td>396</td></tr>
+<tr><td>faixa ok</td><td>662</td><td>335</td><td>423</td></tr>
+<tr><td>taxa de predição positiva</td><td>0,5271</td><td>0,7607</td><td>0,6979</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout co-err">
+    <div class="ct">O “não” honesto</div>
+    <p>A lista de março era curta porque a hora extra separava, em Dourados, quem estava bem de quem não estava. <b>Essa informação deixou de existir no dia 1º de abril.</b> A v3 é o melhor modelo possível com o que ainda é medido — e ele sabe menos sobre cada pessoa. Nenhum retreino devolve uma informação que o export não traz mais.</p>
+  </div>
+  <div class="callout co-ok">
+    <div class="ct">O que devolveria a lista</div>
+    <p>Uma coluna nova com o mesmo significado: <b>o saldo do banco de horas</b>. O trabalho além da escala não sumiu — mudou de sistema. Isso é um pedido de dado para o RH e para a TI, não uma linha de código. Até lá, a Marina pode trabalhar a faixa de alerta <b>por ordem de probabilidade</b>, os 150 primeiros: a regra de negócio é dela, o ranking é do modelo.</p>
+  </div>
+  <div class="callout co-info">
+    <div class="ct">E o que a Marina não precisa ouvir</div>
+    <p>“Feature”, “KS”, “signature”. Ela precisa de três frases: o acordo tirou do sistema a informação de quem trabalha além da escala; o modelo antigo lia essa ausência como risco; o modelo novo não lê, e a lista ficou 18% menor — mas continua maior que março enquanto essa informação não voltar.</p>
+  </div>
+
+
+</div>
+</div>
+<div class="slide" data-title="Passo 9 · O fechamento">
+<div class="slide-inner slide-scroll">
+
+  <span class="bloco-mark bl-c">Bloco C · decidir e construir</span>
+  <div class="step-marker">
+    <div class="step-num c">9</div>
+    <div class="step-meta">
+      <span class="step-file">monitorar.py com diagnóstico e ação</span>
+      <span class="step-obj">O mesmo lote, agora com a v3 e com a conclusão.</span>
+    </div>
+  </div>
+
+  <div class="code-wrap open">
+  <div class="code-header" onclick="toggleCode(this)">
+    <span class="fname">terminal</span>
+    <div class="code-right"><span class="lbadge">rodar</span><button class="copy-btn" onclick="copyCode(event, this)">Copiar</button><span class="code-toggle-btn">Ocultar</span></div>
+  </div>
+  <pre class="code">python monitorar.py --lote lote_aula4_abr --referencia lote_aula3_mar_corrigido --diagnostico feature_morta --acao retreino_sem_coluna</pre>
+</div>
+
+  <div class="code-wrap open">
+  <div class="code-header" onclick="toggleCode(this)">
+    <span class="fname">o que aparece (final)</span>
+    <div class="code-right"><span class="lbadge">o que aparece</span><span class="code-toggle-btn">Ocultar</span></div>
+  </div>
+  <pre class="code">
+resumo
+  linhas                   1400
+  taxa_predicao_positiva   0.6979
+  probabilidade_media      0.5406
+  features_em_drift        3
+  maior_ks                 0.836
+  features_mortas          4
+
+  atencao: feature(s) 100% zerada(s) -&gt; he_eventos, he_valor_total, he_referencia_total, hi_minutos_extras
+  uma coluna 100% zerada nao esta em drift. Ela esta morta.</pre>
+</div>
+  <div class="callout co-warn">
+    <div class="ct">Por que features_mortas continua 4 com a v3 em produção</div>
+    <p>O monitor não olha o modelo: ele olha o <b>arquivo que chegou</b>. Ele compara as 15 colunas de <code>config.FEATURES</code> entre abril e março — e o arquivo de abril continua trazendo a hora extra zerada, mais a <code>hi_minutos_extras</code>. São 4 colunas mortas na origem, qualquer que seja a versão atendendo.</p>
+    <p>Isso é bom: no dia em que a hora extra paga voltar, é este número que vai cair, e é por ele que você vai saber que a v3 deixou de enxergar algo que voltou a existir.</p>
+  </div>
+  <div class="callout co-info">
+    <div class="ct">A linha do tempo no MLflow</div>
+    <p>Ordene o experimento por data: dois runs de monitoramento, um com <code>versao_modelo 2</code> e sem diagnóstico, outro com <code>versao_modelo 3</code>, <code>feature_morta</code> e <code>retreino_sem_coluna</code>. Entre eles, o run de treino com <code>features_removidas</code> e o de promoção com <code>simulado_com_zeradas</code>. É a investigação inteira, na ordem.</p>
+  </div>
+
+
+</div>
+</div>
+<div class="slide" data-title="Conferência final">
+<div class="slide-inner slide-scroll">
+
+
+  <span class="otag">antes de fechar</span>
+  <h2 class="sec-title">O que tem que estar de pé</h2>
+  <div class="final-check" id="final-checklist">
+    <div class="fc-item"><div class="fc-check">✓</div><div class="fc-text">front abrindo com <code>modelo v3 · @champion · 12 features</code></div></div>
+    <div class="fc-item"><div class="fc-check">✓</div><div class="fc-text">run de monitoramento de abril com a v2: <code>features_mortas 4</code>, maior KS 0,836</div></div>
+    <div class="fc-item"><div class="fc-check">✓</div><div class="fc-text">você sabe explicar por que razão 0,000 elimina troca de unidade, e por que o arquivo sozinho não separa bug de política</div></div>
+    <div class="fc-item"><div class="fc-check">✓</div><div class="fc-text">o groupby feito: 55% contra 44%, e a frase que o modelo aprendeu</div></div>
+    <div class="fc-item"><div class="fc-check">✓</div><div class="fc-text">v3 no registry com 12 features e a tag <code>features_removidas</code></div></div>
+    <div class="fc-item"><div class="fc-check">✓</div><div class="fc-text">promoção com <code>--zerar</code>: +0,0259 na atual, +0,0288 na congelada, APROVADO</div></div>
+    <div class="fc-item"><div class="fc-check">✓</div><div class="fc-text">abril pontuado pela v3: 581 · 396 · 423</div></div>
+    <div class="fc-item"><div class="fc-check">✓</div><div class="fc-text">reversão testada: a v2 sobe com 15 features e responde; alias de volta na v3</div></div>
+    <div class="fc-item"><div class="fc-check">✓</div><div class="fc-text">você sabe dizer por que imputar a mediana zera a faixa de alerta</div></div>
+    <div class="fc-item"><div class="fc-check">✓</div><div class="fc-text">a resposta para a Marina escrita em três frases, sem jargão</div></div>
+  </div>
+  <div class="callout co-warn">
+    <div class="ct">Se algum item falhou</div>
+    <p><b>Front travado em “pontuando…”:</b> faltou a linha do <code>main.py</code>, ou o uvicorn não está com <code>--reload</code> — reinicie à mão.</p>
+    <p><b>promover.py com a tabela de duas colunas:</b> faltou o <code>--zerar</code> no comando, ou o bloco 4 de 4.</p>
+    <p><b>Relatório de abril com mais de 3 features em drift:</b> a referência foi o treino ou o <code>lote_aula3_mar</code> com bug; use <code>lote_aula3_mar_corrigido</code>.</p>
+  </div>
+
+
+</div>
+</div>
+<div class="slide" data-title="O que entregar">
+<div class="slide-inner slide-scroll">
+
+
+  <span class="otag">avaliação</span>
+  <h2 class="sec-title">Post-mortem, mesmo formato das outras aulas</h2>
+  <div class="card">
+    <p style="font-size:.88rem;line-height:1.9;color:var(--muted)">
+    <b style="color:var(--cyan)">1 · Situação</b> — o que chegou e o que você viu antes de qualquer rótulo.<br>
+    <b style="color:var(--cyan)">2 · Evidência</b> — razão de média, percentual de zeros, contagem de eventos, o groupby, a versão em produção.<br>
+    <b style="color:var(--cyan)">3 · Diagnóstico</b> — qual das cinco hipóteses, o que eliminou as outras, e <b style="color:var(--text)">o que confirmou E contra C</b>.<br>
+    <b style="color:var(--cyan)">4 · Ação</b> — a v3, por que sem a hora extra e só ela, e por que não imputar.<br>
+    <b style="color:var(--cyan)">5 · Registro</b> — os runs, a tag <code>simulado_com_zeradas</code>, o registry com três versões e o teste de reversão.</p>
+  </div>
+  <h3 class="slide-h3" style="margin-top:20px">E responda, com uma frase cada</h3>
+  <div class="qa">
+    <p>· Por que a <code>hi_minutos_extras</code> nunca fez mal e o bloco de hora extra fez?</p>
+    <p>· O que mudaria no seu diagnóstico se a Marina não tivesse mencionado o acordo?</p>
+    <p>· Por que comparar a v3 com a “v2 antes” seria uma decisão certa por sorte?</p>
+    <p>· Por que a linha do JSONB no <code>main.py</code> continua com <code>config.FEATURES</code>?</p>
+    <p>· Se em junho a hora extra paga voltar só na unidade de Dourados, o que o monitor mostra e o que você faz?</p>
+  </div>
+  <div class="callout co-ok">
+    <div class="ct">Peso: 50% diagnóstico e decisão · 30% código e reversão · 20% registro</div>
+    <p>Hoje a resposta certa cria uma versão. O que separa os grupos é a v3 ser a v2 menos a hora extra <b>e nada mais</b>, e a decisão ter sido tomada no mundo de abril — não no de março.</p>
+  </div>
+
+  <div class="bridge">
+    <h3 class="slide-h3" style="margin-bottom:10px;">🔮 Próxima aula — julho, e o rótulo de abril chega</h3>
+    <p style="color:var(--muted);font-size:.88rem;line-height:1.7;margin-bottom:14px;">Três meses depois, o gabarito de abril existe. O portão passou, o monitor não acusou nada novo desde a v3, a taxa positiva ficou estável. E mesmo assim o F1 da coorte de abril vem pior do que a simulação prometeu. O acordo de banco de horas não apagou só uma coluna: <strong style="color:var(--text)">ele mudou quem pede demissão</strong>. O dado de entrada não mudou nada — mudou a relação entre ele e a saída.</p>
+    <div class="next-pills">
+      <div class="next-pill">concept drift</div>
+      <div class="next-pill">o rótulo atrasa 3 meses</div>
+      <div class="next-pill">monitorar desempenho, não só entrada</div>
+      <div class="next-pill">janela de retreino</div>
+    </div>
+  </div>
+
+
+</div>
+</div>
+
+</div>
+
+<script>
+// ══════════════════════════ BG CANVAS ══════════════════════════
+const bgCanvas = document.getElementById('bg');
+const bgCtx = bgCanvas.getContext('2d');
+let BW, BH, nodes = [];
+function resizeBg() { BW = bgCanvas.width = window.innerWidth; BH = bgCanvas.height = window.innerHeight; }
+resizeBg(); window.addEventListener('resize', () => { resizeBg(); initNodes(); });
+function initNodes() {
+  nodes = [];
+  const n = Math.floor((BW * BH) / 18000);
+  for (let i = 0; i < n; i++) nodes.push({ x:Math.random()*BW, y:Math.random()*BH, vx:(Math.random()-.5)*.4, vy:(Math.random()-.5)*.4, r:Math.random()*2+1 });
+}
+initNodes();
+function drawBg() {
+  bgCtx.clearRect(0, 0, BW, BH);
+  nodes.forEach(n => { n.x += n.vx; n.y += n.vy; if(n.x<0||n.x>BW)n.vx*=-1; if(n.y<0||n.y>BH)n.vy*=-1; });
+  for (let i = 0; i < nodes.length; i++) for (let j = i+1; j < nodes.length; j++) {
+    const dx=nodes[i].x-nodes[j].x, dy=nodes[i].y-nodes[j].y, d=Math.sqrt(dx*dx+dy*dy);
+    if (d < 120) { bgCtx.beginPath(); bgCtx.moveTo(nodes[i].x,nodes[i].y); bgCtx.lineTo(nodes[j].x,nodes[j].y); bgCtx.strokeStyle=`rgba(124,58,237,${.15*(1-d/120)})`; bgCtx.lineWidth=.5; bgCtx.stroke(); }
+  }
+  nodes.forEach(n => { bgCtx.beginPath(); bgCtx.arc(n.x,n.y,n.r,0,Math.PI*2); bgCtx.fillStyle='rgba(0,229,255,.5)'; bgCtx.fill(); });
+  requestAnimationFrame(drawBg);
+}
+drawBg();
+
+// ══════════════════════════ SLIDE ENGINE ══════════════════════════
+const slideEls = Array.from(document.querySelectorAll('.slide'));
+const TOTAL = slideEls.length;
+let current = 0, maxReached = 0;
+const progressBar = document.getElementById('progress-bar');
+const counter     = document.getElementById('slide-counter');
+const titleBar    = document.getElementById('slide-title-bar');
+const navPrev     = document.getElementById('nav-prev');
+const navNext     = document.getElementById('nav-next');
+const dotsEl      = document.getElementById('dots');
+
+slideEls.forEach((_, i) => {
+  const d = document.createElement('div'); d.className = 'dot'; d.onclick = () => goTo(i);
+  dotsEl.appendChild(d);
+});
+
+function goTo(n) {
+  if (n < 0 || n >= TOTAL) return;
+  slideEls.forEach((s, i) => { s.classList.remove('active', 'prev'); if (i < n) s.classList.add('prev'); });
+  slideEls[n].classList.add('active');
+  slideEls[n].scrollTop = 0;
+  current = n;
+  if (n > maxReached) maxReached = n;
+  updateUI();
+  onSlideEnter(current);
+}
+
+function updateUI() {
+  progressBar.style.width = ((current + 1) / TOTAL * 100) + '%';
+  counter.textContent = `${current + 1} / ${TOTAL}`;
+  titleBar.textContent = slideEls[current].dataset.title || '';
+  navPrev.classList.toggle('disabled', current === 0);
+  navNext.classList.toggle('disabled', current === TOTAL - 1);
+  document.querySelectorAll('.dot').forEach((d,i) => {
+    d.classList.toggle('active', i === current);
+    d.classList.toggle('done', i < current);
+  });
+}
+
+navPrev.onclick = () => goTo(current - 1);
+navNext.onclick = () => goTo(current + 1);
+document.addEventListener('keydown', e => {
+  if (e.target.closest('.code')) return;
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') goTo(current + 1);
+  if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   goTo(current - 1);
+});
+requestAnimationFrame(() => goTo(0));
+
+function onSlideEnter(n) {
+  if (slideEls[n].dataset.title === 'Conferência final') {
+    const el = document.getElementById('final-checklist');
+    el.classList.remove('play'); void el.offsetWidth; el.classList.add('play');
+  }
+}
+
+// ══════════════════════════ CÓDIGO ESCONDIDO ══════════════════════════
+function toggleCode(header) {
+  const wrap = header.parentElement;
+  const open = wrap.classList.toggle('open');
+  const btn = header.querySelector('.code-toggle-btn');
+  if (btn) btn.textContent = open ? 'Ocultar' : 'Clique para ver';
+}
+
+// ══════════════════════════ COPIAR CÓDIGO ══════════════════════════
+function copyCode(evento, botao) {
+  evento.stopPropagation();
+  const wrap = botao.closest('.code-wrap');
+  const texto = wrap.querySelector('.code').textContent;
+  const feedback = (ok) => {
+    botao.textContent = ok ? '✓ Copiado' : 'Falhou';
+    botao.classList.toggle('done', ok);
+    setTimeout(() => { botao.textContent = 'Copiar'; botao.classList.remove('done'); }, 1800);
+  };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(texto).then(() => feedback(true), () => feedback(false));
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = texto; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    feedback(ok);
+  }
+}
+
+/* ══════════════════════ utilidades ══════════════════════ */
+function lcg(seed) {            // gerador deterministico: todo aluno ve o mesmo
+  let s = seed;
+  return () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+}
+function normal(rnd, media, dp) {
+  const u = Math.max(rnd(), 1e-9), v = rnd();
+  return media + dp * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+
+/* ═══════════════════ Simulador do portão de entrada (slide de teoria) ═══ */
+(function(){
+  const raiz = document.querySelector('.portao-sim');
+  if(!raiz) return;
+
+  const DADOS = {
+    jan: {
+      titulo: 'lote_aula1_jan',
+      razoes: ['todas ≈ 1,0 contra o treino', 'bom'],
+      zeros:  ['sem deslocamento', 'bom'],
+      ks:     ['maior 0,025 — nenhuma acima do corte', 'bom'],
+      reprovado: false,
+      passou: 'O contrato reconhece o arquivo. 1.400 linhas pontuadas, lista coerente com o mês anterior.',
+      humano: null,
+      semPortao: 'Mesmo resultado. Mês comum não precisa de portão — e é por isso que ninguém constrói um antes do primeiro incidente.'
+    },
+    fev: {
+      titulo: 'lote_aula2_fev',
+      razoes: ['5,76 · 11,24 · 11,45 — tortas', 'ruim'],
+      zeros:  ['64% → 16% na hora extra: deslocados', 'ruim'],
+      ks:     ['maior 0,564 — 7 features acima do corte', 'ruim'],
+      reprovado: true,
+      retido: 'Retido. Nenhuma linha virou predição. O arquivo espera uma pessoa.',
+      humano: 'Zeros deslocados e contagem de eventos multiplicando junto: <b>é gente diferente</b>. Entrou a unidade de Dourados. Ação: retreinar incorporando, promover a v2.',
+      semPortao: 'As 1.400 linhas entram e são pontuadas pela v1, que não conhece Dourados. A lista sai errada e <b>ninguém percebe até o rótulo chegar, três meses depois</b>.'
+    },
+    mar: {
+      titulo: 'lote_aula3_mar',
+      razoes: ['60,0 e 100,0 — exatas, redondas', 'ruim'],
+      zeros:  ['16,4% → 16,4%: idênticos nas quinze', 'bom'],
+      ks:     ['maior 0,676 — 2 features do mesmo bloco', 'ruim'],
+      reprovado: true,
+      retido: 'Retido. Nenhuma linha virou predição. O arquivo espera uma pessoa.',
+      humano: 'Razão redonda com zeros parados e contagem intacta: <b>é a mesma gente medida com outra régua</b>. Ação: consertar o export na origem. Nenhuma versão nova.',
+      semPortao: 'As 1.400 linhas entram com valores 60× e 100× maiores. A faixa de alerta cai de 165 para <b>72</b>, e a Marina trabalha a lista errada por um mês inteiro.'
+    }
+  };
+
+  const pacote  = raiz.querySelector('#ps-pacote');
+  const portao  = raiz.querySelector('#ps-portao');
+  const subPort = raiz.querySelector('#ps-portao-sub');
+  const quar    = raiz.querySelector('#ps-quar');
+  const quarN   = raiz.querySelector('#ps-quar-n');
+  const saida   = raiz.querySelector('#ps-saida');
+  const ligado  = raiz.querySelector('#ps-ligado');
+  const botoes  = [...raiz.querySelectorAll('.ps-arq')];
+
+  let retidos = 0;
+  let relogios = [];
+  const limpar = () => { relogios.forEach(clearTimeout); relogios = []; };
+  const daqui = (ms, fn) => relogios.push(setTimeout(fn, ms));
+
+  function linha(rot, par){
+    return `<div class="ps-linha"><div class="ps-rot">${rot}</div>` +
+           `<div class="ps-val ${par[1]}">${par[0]}</div></div>`;
+  }
+
+  function rodar(chave){
+    limpar();
+    const d = DADOS[chave];
+    const on = ligado.checked;
+    const barra = on && d.reprovado;
+
+    botoes.forEach(b => b.classList.toggle('ativo', b.dataset.lote === chave));
+    portao.className = 'ps-portao' + (on ? '' : ' desligado');
+    subPort.textContent = on ? 'contrato' : 'sem contrato';
+    pacote.className = 'ps-pacote' + (d.reprovado ? ' ruim' : '');
+    pacote.style.transition = 'none';
+    pacote.style.left = '11%';
+    pacote.style.top = '31px';
+    pacote.style.opacity = '0';
+    saida.innerHTML = '<p class="ps-vazio">…</p>';
+
+    daqui(40, () => {
+      pacote.style.transition = '';
+      pacote.style.opacity = '1';
+      pacote.style.left = '50%';          // posicoes em %: funcionam mesmo com
+    });                                    // o slide ainda oculto
+
+    daqui(1150, () => {
+      portao.classList.add(on ? (barra ? 'fechado' : 'aberto') : 'desligado');
+      let html = linha('razão de média', d.razoes) + linha('zeros', d.zeros) + linha('ks', d.ks);
+
+      if(barra){
+        pacote.style.top = '106px';
+        daqui(760, () => { pacote.style.opacity = '0'; });
+        retidos++;
+        quar.classList.add('cheia');
+        quarN.textContent = retidos === 1 ? '1 lote retido · ' + d.titulo
+                                          : retidos + ' lotes retidos';
+        html += `<div class="ps-fecho retido"><b>${d.retido}</b></div>`;
+        if(d.humano) html += `<div class="ps-fecho passou"><b>A pessoa olha e decide:</b> ${d.humano}</div>`;
+      } else {
+        pacote.style.left = '89%';
+        if(!on && d.reprovado){
+          html += `<div class="ps-fecho perigo"><b>Sem portão:</b> ${d.semPortao}</div>`;
+        } else if(!on){
+          html += `<div class="ps-fecho passou">${d.semPortao}</div>`;
+        } else {
+          html += `<div class="ps-fecho passou">${d.passou}</div>`;
+        }
+      }
+      saida.innerHTML = html;
+    });
+  }
+
+  botoes.forEach(b => b.onclick = () => rodar(b.dataset.lote));
+  ligado.onchange = () => {
+    const ativo = raiz.querySelector('.ps-arq.ativo');
+    rodar(ativo ? ativo.dataset.lote : 'mar');
+  };
+  rodar('mar');
+})();
+</script>
+</body>
+</html>
